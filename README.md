@@ -52,10 +52,12 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
-Check status:
+Check status / print URLs:
 ```bash
 docker compose ps
 curl http://localhost:8080/api/health   # {"ok":true}
+docker compose logs --tail=30 backend   # startup prints Admin + Google OAuth redirect URL
+docker compose run --rm urls            # prints Admin Dashboard + Google OAuth redirect URL
 ```
 
 Open:

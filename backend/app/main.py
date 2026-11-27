@@ -78,6 +78,27 @@ def on_startup() -> None:
         if "respondent_key" not in resp_cols:
             conn.execute(text("ALTER TABLE responses ADD COLUMN respondent_key VARCHAR(128) DEFAULT ''"))
 
+    # Print useful URLs on startup (visible in docker compose logs / termux logs)
+    base = (settings.public_base_url or settings.frontend_origin or "http://localhost:8080").rstrip("/")
+    google_cb = f"{base}/api/auth/callback/google"
+    lines = [
+        "",
+        "=" * 60,
+        "Questly is running",
+        f"Admin Dashboard:        {base}/",
+        f"API Health:             {base}/api/health",
+        f"Public form:            {base}/q/<slug>  (after DOCX upload)",
+        f"Anonymous form:         {base}/q/<slug>?auth=open",
+        f"Dashboard:              {base}/dashboard/<slug>",
+        f"Google OAuth Redirect:  {google_cb}",
+        "Add the Google OAuth Redirect URI above in Google Cloud Console > Credentials.",
+        "If using quick tunnel, replace base with current https://<tunnel>.trycloudflare.com and add that callback URI in Google Console.",
+        "=" * 60,
+        "",
+    ]
+    msg = "\n".join(lines)
+    print(msg, flush=True)
+
 
 @app.get("/api/health")
 def health():

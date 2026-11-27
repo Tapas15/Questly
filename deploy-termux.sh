@@ -102,26 +102,30 @@ PY
 )"
 
 echo ""
-echo "App URLs (local):"
-echo "  Admin:       $BASE_LOCAL/"
-echo "  API health:  $BASE_LOCAL/api/health"
+echo "============================================"
+echo " Questly URLs"
+echo "============================================"
+echo "Admin Dashboard:       $BASE_LOCAL/"
+echo "API Health:            $BASE_LOCAL/api/health"
+echo "Google OAuth Redirect: $BASE_LOCAL/api/auth/callback/google"
 if [ -n "$SLUG" ]; then
-  echo "  Form:        $BASE_LOCAL/q/$SLUG"
-  echo "  Form anon:   $BASE_LOCAL/q/$SLUG?auth=open"
-  echo "  Dashboard:   $BASE_LOCAL/dashboard/$SLUG"
+  echo "Form:                  $BASE_LOCAL/q/$SLUG"
+  echo "Form (anonymous):      $BASE_LOCAL/q/$SLUG?auth=open"
+  echo "Dashboard:             $BASE_LOCAL/dashboard/$SLUG"
 else
-  echo "  Form:        upload a .docx in Admin first, then /q/<slug>"
+  echo "Form:                  upload a .docx in Admin first, then /q/<slug>"
 fi
+echo "============================================
 
 if [ -n "$BASE_NET" ]; then
   echo ""
-  echo "App URLs (network/LAN):"
-  echo "  Admin:       $BASE_NET/"
-  echo "  API health:  $BASE_NET/api/health"
+  echo "LAN URLs:"
+  echo "  Admin Dashboard:       $BASE_NET/"
+  echo "  Google OAuth Redirect: $BASE_NET/api/auth/callback/google"
   if [ -n "$SLUG" ]; then
-    echo "  Form:        $BASE_NET/q/$SLUG"
-    echo "  Form anon:   $BASE_NET/q/$SLUG?auth=open"
-    echo "  Dashboard:   $BASE_NET/dashboard/$SLUG"
+    echo "  Form:                  $BASE_NET/q/$SLUG"
+    echo "  Form (anonymous):      $BASE_NET/q/$SLUG?auth=open"
+    echo "  Dashboard:             $BASE_NET/dashboard/$SLUG"
   fi
 fi
 
@@ -136,17 +140,21 @@ if command -v cloudflared >/dev/null 2>&1; then
   for i in $(seq 1 30); do
     TURL="$(grep -oE 'https://[-a-z0-9]+\.trycloudflare\.com' .run/cloudflared.log | tail -n1 || true)"
     if [ -n "$TURL" ]; then
-      echo "  Public URL:  $TURL"
-      echo "  Admin:       $TURL/"
-      echo "  API health:  $TURL/api/health"
+      echo ""
+      echo "============================================"
+      echo " PUBLIC URLS (Cloudflare quick tunnel)"
+      echo "============================================"
+      echo "Admin Dashboard:       $TURL/"
+      echo "API Health:            $TURL/api/health"
+      echo "Google OAuth Redirect: $TURL/api/auth/callback/google"
       if [ -n "$SLUG" ]; then
-        echo "  Form:        $TURL/q/$SLUG"
-        echo "  Form anon:   $TURL/q/$SLUG?auth=open"
-        echo "  Dashboard:   $TURL/dashboard/$SLUG"
-        echo "  Share:       use Admin to copy share link (contains token)"
+        echo "Form:                  $TURL/q/$SLUG"
+        echo "Form (anonymous):      $TURL/q/$SLUG?auth=open"
+        echo "Dashboard:             $TURL/dashboard/$SLUG"
       fi
-      echo "  Google OAuth redirect URI to add now:"
-      echo "    $TURL/api/auth/callback/google"
+      echo "============================================"
+      echo "Add this in Google Cloud Console > OAuth client > Authorized redirect URIs:"
+      echo "  $TURL/api/auth/callback/google"
       break
     fi
     sleep 1
