@@ -80,11 +80,15 @@ async def login(provider: str, request: Request, next: str = "/"):
     if provider not in allowed:
         raise HTTPException(status_code=404, detail=f"{provider.title()} login is not configured. Set {provider.upper()}_CLIENT_ID and {provider.upper()}_CLIENT_SECRET in .env.")
     request.session["auth_next"] = next if next.startswith("/") else "/"
-    redirect_uri = str(request.url_for("auth_callback", provider=provider))
-    # behind reverse proxy/tunnel, prefer public base
+    # Determine public base from request headers (works with quick tunnels/proxies),
+    # falling back to configured public_base_url.
+    forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    base = f"{forwarded_proto}://{forwarded_host}".rstrip("/") if forwarded_host else str(request.base_url).rstrip("/")
     if settings.public_base_url:
         base = settings.public_base_url.rstrip("/")
-        redirect_uri = f"{base}/api/auth/callback/{provider}"
+    redirect_uri = f"{base}/api/auth/callback/{provider}"
+    request.session["auth_redirect_base"] = base
     client = oauth.create_client(provider)
     return await client.authorize_redirect(request, redirect_uri)
 
@@ -128,7 +132,14 @@ async def auth_callback(provider: str, request: Request, db: Session = Depends(g
     request.session["user_id"] = user.id
     nxt = request.session.pop("auth_next", "/")
     target = nxt if nxt.startswith("/") else "/"
-    return RedirectResponse(url=f"{settings.frontend_origin.rstrip('/')}{target}")
+    redirect_base = request.session.pop("auth_redirect_base", "").rstrip("/")
+    if settings.frontend_origin:
+        redirect_base = settings.frontend_origin.rstrip("/")
+    if not redirect_base:
+        forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+        forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+        redirect_base = f"{forwarded_proto}://{forwarded_host}".rstrip("/") if forwarded_host else str(request.base_url).rstrip("/")
+    return RedirectResponse(url=f"{redirect_base}{target}")
 
 
 @router.post("/logout")

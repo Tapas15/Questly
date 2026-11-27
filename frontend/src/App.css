@@ -164,3 +164,7 @@ th { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color:
   .row.gap .btn, .copy-row .btn { width: auto; }
   .share-sidebar { position: static; }
 }
+
+
+.highlight-missing { outline: 2px solid #ef4444; box-shadow: 0 0 0 4px rgba(239,68,68,.12); }
+.req-star { color: #ef4444; margin-left: 4px; font-weight: 700; }

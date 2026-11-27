@@ -134,9 +134,36 @@ export function FormPage() {
   };
   const reject = (id: string) => setSuggestions(prev => { const n = { ...prev }; delete n[id]; return n; });
 
+  const isUnanswered = (qu: any) => {
+    const val = answers[qu.id];
+    if (qu.type === 'text') return typeof val !== 'string' || !val.trim();
+    if (qu.type === 'single') {
+      if (typeof val === 'string') return !val.trim();
+      if (val && typeof val === 'object') return !String(val.value || '').trim();
+      return true;
+    }
+    if (qu.type === 'multi') {
+      const vals = Array.isArray(val) ? val : (val && typeof val === 'object' ? val.values : []);
+      return !Array.isArray(vals) || vals.filter((v: any) => String(v).trim()).length === 0;
+    }
+    return false;
+  };
+
   const submit = async () => {
     if (!q) return;
-    setSubmitState('submitting'); setError('');
+    setError('');
+    const missing = q.questions.find(isUnanswered);
+    if (missing) {
+      setError(`Please fill Q${missing.number}: ${missing.text}`);
+      const el = document.getElementById(`question-${missing.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('highlight-missing');
+        setTimeout(() => el.classList.remove('highlight-missing'), 1800);
+      }
+      return;
+    }
+    setSubmitState('submitting');
     try {
       await api.submit(slug, { respondent, answers, ai_instruction: instruction, accepted_ai: acceptedAI }, authMode);
       setSubmitState('done');

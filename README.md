@@ -47,17 +47,29 @@ Free, open-source, AI-powered questionnaire app. Upload a `.docx` questionnaire,
 git clone https://github.com/Tapas15/Questly.git
 cd Questly
 cp .env.example .env
-# edit .env (set ADMIN_TOKEN, PUBLIC_BASE_URL, FRONTEND_ORIGIN; optional Google/LLM)
+# edit .env: set ADMIN_TOKEN, SESSION_SECRET, optional LLM/webhook/auth.
+# Leave FRONTEND_ORIGIN/PUBLIC_BASE_URL empty for quick tunnels/dynamic URLs.
 docker compose up --build -d
+```
+
+Check status:
+```bash
+docker compose ps
+curl http://localhost:8080/api/health   # {"ok":true}
 ```
 
 Open:
 - Admin: `http://localhost:8080`
 - API health: `http://localhost:8000/api/health`
+- After uploading DOCX in Admin, form: `http://localhost:8080/q/<slug>`
+- Anonymous form: `http://localhost:8080/q/<slug>?auth=open`
+- Dashboard: `http://localhost:8080/dashboard/<slug>`
+- Share (read-only, token from Admin): `http://localhost:8080/s/<share_token>`
 
 Stop:
 ```bash
-docker compose down
+docker compose down          # keeps data
+docker compose down -v       # deletes DB/uploads volumes
 ```
 
 ## Local Development
@@ -83,7 +95,10 @@ Dev UI: `http://localhost:5173` (proxies `/api` to backend).
 
 ## Termux (Android)
 
+### Install & run (after clone)
+
 ```bash
+pkg update -y
 pkg install git -y
 git clone https://github.com/Tapas15/Questly.git
 cd Questly
@@ -91,9 +106,36 @@ chmod +x deploy-termux.sh
 ./deploy-termux.sh
 ```
 
-Script installs deps, builds frontend, creates `.env` if missing, and starts backend/frontend.  
-Manage: `./start-termux.sh` / `./stop-termux.sh`  
-Logs: `.run/backend.log`, `.run/frontend.log`
+What `deploy-termux.sh` does:
+- Installs dependencies (python, nodejs-lts, git, build tools)
+- Creates `.venv`, installs `backend/requirements.txt`
+- Creates `.env` from `.env.example` if missing (leaves `PUBLIC_BASE_URL`/`FRONTEND_ORIGIN` empty for dynamic URLs)
+- Builds frontend and creates `start-termux.sh` / `stop-termux.sh`
+- Starts backend + frontend
+
+### Start / stop
+
+```bash
+./start-termux.sh
+./stop-termux.sh
+```
+
+### URLs printed by `start-termux.sh`
+
+The script prints available URLs:
+- **Local**: `http://localhost:8080/`, `/api/health`, `/q/<slug>`, `/q/<slug>?auth=open`, `/dashboard/<slug>`
+- **LAN**: `http://<phone-ip>:8080/...` (same paths)
+- **Cloudflare quick tunnel** (if `cloudflared` installed): prints new `https://<random>.trycloudflare.com/...` URLs and the Google OAuth redirect URI to add.
+
+Install cloudflared on Termux if needed:
+```bash
+pkg install cloudflared -y
+```
+
+> Quick tunnel URL changes every restart. The app accepts the new URL automatically (no `.env` change needed). For Google sign-in, add the newly printed redirect URI: `https://<new-url>/api/auth/callback/google`.
+> Data persists in `backend/data` and `backend/uploads`.
+
+Logs: `.run/backend.log`, `.run/frontend.log`, `.run/cloudflared.log`
 
 ## Configuration (`.env`)
 
@@ -101,8 +143,8 @@ Logs: `.run/backend.log`, `.run/frontend.log`
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./backend/data/app.db` | SQLite default; set PostgreSQL URL for Postgres. |
 | `ADMIN_TOKEN` | `changeme` | Admin API token for upload/export/delete/responses. |
-| `FRONTEND_ORIGIN` | `http://localhost:5173` | CORS origin / deployed frontend URL. |
-| `PUBLIC_BASE_URL` | `http://localhost:5173` | Public base URL used in generated links. |
+| `FRONTEND_ORIGIN` | empty | Optional fixed frontend/public origin. Leave empty for quick tunnels; app infers active origin from request headers. |
+| `PUBLIC_BASE_URL` | empty | Optional fixed public base URL for generated links/OAuth redirects. Leave empty for quick tunnels. |
 | `LLM_PROVIDER` | `ollama` | `ollama` or `openai_compatible`. |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint. Docker: `http://host.docker.internal:11434`. |
 | `OLLAMA_MODEL` | `llama3.1` | Ollama model. |
@@ -138,7 +180,16 @@ Logs: `.run/backend.log`, `.run/frontend.log`
 3. Redeploy: `docker compose up --build -d`
 4. Share Admin’s **Authenticated link**. Respondents sign in with Google before submit; identity is attached to response.
 
-> Cloudflare quick tunnels change URL on restart. Update `PUBLIC_BASE_URL`, `FRONTEND_ORIGIN`, and Google redirect URI when URL changes. Use a named tunnel/custom domain for stable public sharing.
+### Cloudflare quick tunnel (URL changes on restart)
+
+Quick tunnels (`cloudflared tunnel --url http://localhost:8080`) generate a random `*.trycloudflare.com` URL on each restart. This app now supports that mode **without changing `.env`**:
+
+- Leave `PUBLIC_BASE_URL` and `FRONTEND_ORIGIN` empty.
+- Start app (Docker or Termux), then run: `cloudflared tunnel --url http://localhost:8080`
+- Use the printed `https://....trycloudflare.com` URL. App accepts the new URL automatically (dynamic CORS/origin/redirect handling).
+- Data stays in Docker volumes `backend_data`/`backend_uploads` across URL changes and container restarts (`docker compose down -v` deletes data).
+
+**Google OAuth caveat:** Google requires each redirect URI to be pre-registered. For quick tunnels, you must add the new `https://<current-tunnel>.trycloudflare.com/api/auth/callback/google` in Google Cloud Console after every tunnel restart. The app cannot bypass this Google security rule. For a permanent URL, use a named Cloudflare Tunnel/custom domain and set fixed `PUBLIC_BASE_URL`/`FRONTEND_ORIGIN`.
 
 ## Google Sheets / Structured Export (No Google OAuth in App)
 

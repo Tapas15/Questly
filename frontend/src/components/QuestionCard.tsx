@@ -43,10 +43,10 @@ export function QuestionCard({ question, value, onChange, onAskAI, aiSuggestion,
   };
 
   return (
-    <div className="card question-card">
+    <div className="card question-card" id={`question-${question.id}`}>
       <div className="q-head">
         <div>
-          <div className="q-num">Q{question.number}</div>
+          <div className="q-num">Q{question.number} <span className="req-star">*</span></div>
           <div className="q-text">{question.text}</div>
           {question.max_selections ? <div className="muted">Select up to {question.max_selections}</div> : null}
         </div>

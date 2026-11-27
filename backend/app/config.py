@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     app_name: str = "AI Questionnaire"
     database_url: str = "sqlite:///./backend/data/app.db"
     admin_token: str = "changeme"
-    frontend_origin: str = "http://localhost:5173"
+    frontend_origin: str = ""  # optional; when empty, infer from request/public base
 
     llm_provider: str = "ollama"  # ollama | openai_compatible
     ollama_base_url: str = "http://localhost:11434"
@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     llm_base_url: str = ""
     llm_model: str = "gpt-4o-mini"
 
-    public_base_url: str = "http://localhost:5173"
+    public_base_url: str = ""  # optional; when empty, infer from request
 
     session_secret: str = "change-this-session-secret"
     google_client_id: str = ""

@@ -43,9 +43,11 @@ def setv(key, val):
         text = re.sub(pat, line, text, flags=re.M)
     else:
         text += ('\n' if not text.endswith('\n') else '') + line + '\n'
+# Leave URL vars empty so app infers active origin (quick tunnel / LAN / localhost).
 setv('DATABASE_URL', 'sqlite:///./backend/data/app.db')
-setv('FRONTEND_ORIGIN', 'http://localhost:8080')
-setv('PUBLIC_BASE_URL', 'http://localhost:8080')
+for k in ['FRONTEND_ORIGIN','PUBLIC_BASE_URL']:
+    if not re.search(rf'^{k}=.*$', text, flags=re.M):
+        text += ('\n' if not text.endswith('\n') else '') + f'{k}=\n'
 p.write_text(text, encoding='utf-8')
 print('env updated')
 PY
@@ -84,10 +86,83 @@ else
   echo "Frontend started: $(cat .run/frontend.pid)"
 fi
 
-echo "App URLs:"
-echo "  Local:    http://localhost:8080"
-echo "  Network:  http://$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -n1):8080"
-echo "Logs: .run/backend.log .run/frontend.log"
+IP="$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -n1)"
+BASE_LOCAL="http://localhost:8080"
+BASE_NET=""
+if [ -n "$IP" ]; then BASE_NET="http://$IP:8080"; fi
+SLUG="$(python - <<'PY'
+import sqlite3
+try:
+    con=sqlite3.connect('backend/data/app.db')
+    row=con.execute('select public_slug from questionnaires order by created_at desc limit 1').fetchone()
+    print(row[0] if row else '')
+except Exception:
+    print('')
+PY
+)"
+
+echo ""
+echo "App URLs (local):"
+echo "  Admin:       $BASE_LOCAL/"
+echo "  API health:  $BASE_LOCAL/api/health"
+if [ -n "$SLUG" ]; then
+  echo "  Form:        $BASE_LOCAL/q/$SLUG"
+  echo "  Form anon:   $BASE_LOCAL/q/$SLUG?auth=open"
+  echo "  Dashboard:   $BASE_LOCAL/dashboard/$SLUG"
+else
+  echo "  Form:        upload a .docx in Admin first, then /q/<slug>"
+fi
+
+if [ -n "$BASE_NET" ]; then
+  echo ""
+  echo "App URLs (network/LAN):"
+  echo "  Admin:       $BASE_NET/"
+  echo "  API health:  $BASE_NET/api/health"
+  if [ -n "$SLUG" ]; then
+    echo "  Form:        $BASE_NET/q/$SLUG"
+    echo "  Form anon:   $BASE_NET/q/$SLUG?auth=open"
+    echo "  Dashboard:   $BASE_NET/dashboard/$SLUG"
+  fi
+fi
+
+if command -v cloudflared >/dev/null 2>&1; then
+  echo ""
+  echo "Cloudflare quick tunnel:"
+  echo "  Starting tunnel... new URL will be printed below (changes on restart)."
+  echo "  Add new callback to Google OAuth: https://<new-url>/api/auth/callback/google"
+  pkill -f "cloudflared tunnel --url http://localhost:8080" >/dev/null 2>&1 || true
+  nohup cloudflared tunnel --url http://localhost:8080 --no-autoupdate > .run/cloudflared.log 2>&1 &
+  echo $! > .run/cloudflared.pid
+  for i in $(seq 1 30); do
+    TURL="$(grep -oE 'https://[-a-z0-9]+\.trycloudflare\.com' .run/cloudflared.log | tail -n1 || true)"
+    if [ -n "$TURL" ]; then
+      echo "  Public URL:  $TURL"
+      echo "  Admin:       $TURL/"
+      echo "  API health:  $TURL/api/health"
+      if [ -n "$SLUG" ]; then
+        echo "  Form:        $TURL/q/$SLUG"
+        echo "  Form anon:   $TURL/q/$SLUG?auth=open"
+        echo "  Dashboard:   $TURL/dashboard/$SLUG"
+        echo "  Share:       use Admin to copy share link (contains token)"
+      fi
+      echo "  Google OAuth redirect URI to add now:"
+      echo "    $TURL/api/auth/callback/google"
+      break
+    fi
+    sleep 1
+  done
+  if [ -z "${TURL:-}" ]; then
+    echo "  Tunnel URL not detected yet. Check: tail -f .run/cloudflared.log"
+  fi
+else
+  echo ""
+  echo "Cloudflare quick tunnel: cloudflared not installed."
+  echo "  Install: pkg install cloudflared -y   (or install official binary)"
+  echo "  Then rerun ./start-termux.sh to get a public URL."
+fi
+
+echo ""
+echo "Logs: .run/backend.log .run/frontend.log .run/cloudflared.log"
 SH
 chmod +x start-termux.sh
 
@@ -96,7 +171,7 @@ cat > stop-termux.sh <<'SH'
 set -euo pipefail
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$APP_DIR"
-for name in backend frontend; do
+for name in backend frontend cloudflared; do
   if [ -f ".run/${name}.pid" ]; then
     pid="$(cat ".run/${name}.pid")"
     if kill -0 "$pid" 2>/dev/null; then
@@ -106,6 +181,7 @@ for name in backend frontend; do
     rm -f ".run/${name}.pid"
   fi
 done
+pkill -f "cloudflared tunnel --url http://localhost:8080" >/dev/null 2>&1 || true
 SH
 chmod +x stop-termux.sh
 

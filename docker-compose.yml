@@ -6,8 +6,8 @@ services:
     environment:
       DATABASE_URL: sqlite:////app/backend/data/app.db
       ADMIN_TOKEN: ${ADMIN_TOKEN:-changeme}
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8080}
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
       SESSION_SECRET: ${SESSION_SECRET:-change-this-session-secret}
       AUTH_REQUIRED_FOR_SUBMIT: ${AUTH_REQUIRED_FOR_SUBMIT:-false}
       AUTH_REQUIRED_PROVIDER: ${AUTH_REQUIRED_PROVIDER:-google}

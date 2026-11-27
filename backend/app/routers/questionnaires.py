@@ -29,20 +29,35 @@ def _require_admin(x_admin_token: str | None) -> None:
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
 
-def _public_url(slug: str) -> str:
-    return f"{settings.public_base_url.rstrip('/')}/q/{slug}"
+def _request_base(request: Request | None) -> str:
+    if settings.public_base_url:
+        return settings.public_base_url.rstrip("/")
+    if request is None:
+        return ""
+    forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if forwarded_host:
+        return f"{forwarded_proto}://{forwarded_host}".rstrip("/")
+    return str(request.base_url).rstrip("/")
 
 
-def _q_out(q: Questionnaire) -> dict[str, Any]:
+def _public_url(slug: str, request: Request | None = None) -> str:
+    base = _request_base(request)
+    return f"{base}/q/{slug}" if base else f"/q/{slug}"
+
+
+def _q_out(q: Questionnaire, request: Request | None = None) -> dict[str, Any]:
     schema = json.loads(q.schema_json)
+    base = _request_base(request)
+    share_url = f"{base}/s/{q.share_token}" if base else f"/s/{q.share_token}"
     return {
         "id": q.id,
         "title": q.title,
         "source_filename": q.source_filename,
         "public_slug": q.public_slug,
         "share_token": q.share_token,
-        "public_url": _public_url(q.public_slug),
-        "share_url": f"{settings.public_base_url.rstrip('/')}/s/{q.share_token}",
+        "public_url": _public_url(q.public_slug, request),
+        "share_url": share_url,
         "created_at": q.created_at,
         "firm_fields": schema.get("firm_fields", []),
         "questions": schema.get("questions", []),
@@ -59,6 +74,7 @@ def _get_session_user(request: Request, db: Session) -> User | None:
 
 @router.post("/questionnaires/upload", response_model=UploadResponse)
 async def upload_questionnaire(
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     x_admin_token: str | None = Header(default=None),
@@ -87,16 +103,16 @@ async def upload_questionnaire(
     db.add(q)
     db.commit()
     db.refresh(q)
-    return {"questionnaire": _q_out(q)}
+    return {"questionnaire": _q_out(q, request)}
 
 
 @router.get("/questionnaires/{slug}")
-def get_questionnaire(slug: str, db: Session = Depends(get_db)):
+def get_questionnaire(slug: str, request: Request, db: Session = Depends(get_db)):
     q = db.scalar(select(Questionnaire).where(Questionnaire.public_slug == slug))
     if not q:
         raise HTTPException(status_code=404, detail="Questionnaire not found")
     schema = json.loads(q.schema_json)
-    out = _q_out(q)
+    out = _q_out(q, request)
     try:
         from ..services.autofill import build_sample_prefill
         # random seed so each fetch gives a different sample draft
@@ -130,7 +146,7 @@ def get_questionnaire_sample(slug: str, profile: str | None = None, db: Session 
 
 
 @router.get("/share/{token}")
-def get_shared(token: str, db: Session = Depends(get_db)):
+def get_shared(token: str, request: Request, db: Session = Depends(get_db)):
     q = db.scalar(select(Questionnaire).where(Questionnaire.share_token == token))
     if not q:
         raise HTTPException(status_code=404, detail="Share link not found")
@@ -166,7 +182,7 @@ def get_shared(token: str, db: Session = Depends(get_db)):
     return {
         "questionnaire": {
             "title": q.title,
-            "public_url": _public_url(q.public_slug),
+            "public_url": _public_url(q.public_slug, request),
             "created_at": q.created_at,
             "stats": schema.get("stats", {}),
             "firm_fields": firm_fields,
@@ -199,10 +215,10 @@ def _answer_labels(question: dict[str, Any], value: Any) -> list[str]:
 
 
 @router.get("/questionnaires")
-def list_questionnaires(db: Session = Depends(get_db), x_admin_token: str | None = Header(default=None)):
+def list_questionnaires(request: Request, db: Session = Depends(get_db), x_admin_token: str | None = Header(default=None)):
     _require_admin(x_admin_token)
     qs = db.scalars(select(Questionnaire).order_by(Questionnaire.created_at.desc())).all()
-    return {"questionnaires": [_q_out(q) for q in qs]}
+    return {"questionnaires": [_q_out(q, request) for q in qs]}
 
 
 @router.delete("/questionnaires/{slug}")
@@ -266,6 +282,27 @@ def submit(slug: str, req: SubmitRequest, request: Request, db: Session = Depend
         raise HTTPException(status_code=401, detail="Please sign in with Google to submit your response.")
     if require_auth and settings.auth_required_provider != "any" and user and user.provider != settings.auth_required_provider:
         raise HTTPException(status_code=401, detail=f"Please sign in with {settings.auth_required_provider.title()} to submit your response.")
+
+    schema = json.loads(q.schema_json)
+    questions = schema.get("questions", [])
+    for qu in questions:
+        val = req.answers.get(qu.get("id"))
+        qlabel = f"Q{qu.get('number')}: {qu.get('text','Question')}"
+        qtype = qu.get("type")
+        missing = False
+        if qtype == "text":
+            missing = not isinstance(val, str) or not val.strip()
+        elif qtype == "single":
+            if isinstance(val, dict):
+                missing = not str(val.get("value") or "").strip()
+            else:
+                missing = not isinstance(val, str) or not val.strip()
+        elif qtype == "multi":
+            vals = val.get("values") if isinstance(val, dict) else val
+            missing = not isinstance(vals, list) or len([v for v in vals if str(v).strip()]) == 0
+        if missing:
+            raise HTTPException(status_code=400, detail=f"Please fill {qlabel} before submitting.")
+
     respondent = req.respondent
     identity = {"mode": "anonymous", "label": "Anonymous"}
     respondent_key = ""
@@ -312,7 +349,6 @@ def submit(slug: str, req: SubmitRequest, request: Request, db: Session = Depend
     result = {"response_id": resp.id, "status": resp.status, "submitted_at": resp.submitted_at.isoformat() if resp.submitted_at else None, "updated": bool(existing)}
     webhook_result = {"sent": False, "reason": "not_attempted"}
     try:
-        schema = json.loads(q.schema_json)
         response_payload = {
             "id": resp.id,
             "submitted_at": resp.submitted_at.isoformat() if resp.submitted_at else None,

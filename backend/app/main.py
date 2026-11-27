@@ -3,9 +3,10 @@ from __future__ import annotations
 import secrets
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import Response
 from sqlalchemy import inspect, text
 
 from .config import settings
@@ -15,20 +16,46 @@ from .routers.auth import router as auth_router
 
 app = FastAPI(title=settings.app_name)
 
+
+class DynamicCORSMiddleware(BaseHTTPMiddleware):
+    _local = {"http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8080", "http://127.0.0.1:8080"}
+
+    def _allowed(self, origin: str) -> bool:
+        if not origin:
+            return False
+        if origin in self._local:
+            return True
+        if settings.frontend_origin and origin == settings.frontend_origin.rstrip('/'):
+            return True
+        if settings.public_base_url and origin == settings.public_base_url.rstrip('/'):
+            return True
+        if not settings.frontend_origin and not settings.public_base_url:
+            return origin.startswith('http://') or origin.startswith('https://')
+        return False
+
+    async def dispatch(self, request: Request, call_next):
+        origin = request.headers.get('origin', '')
+        if request.method == 'OPTIONS' and self._allowed(origin):
+            resp = Response(status_code=204)
+        else:
+            resp = await call_next(request)
+        if self._allowed(origin):
+            resp.headers['Access-Control-Allow-Origin'] = origin
+            resp.headers['Access-Control-Allow-Credentials'] = 'true'
+            resp.headers['Vary'] = 'Origin'
+            req_headers = request.headers.get('access-control-request-headers')
+            resp.headers['Access-Control-Allow-Headers'] = req_headers or '*'
+            resp.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
+        return resp
+
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.session_secret,
-    same_site="lax",
-    https_only=settings.public_base_url.startswith("https://"),
+    same_site='lax',
+    https_only=(settings.public_base_url or settings.frontend_origin).startswith('https://'),
 )
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[settings.frontend_origin, "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8080"],
-    allow_credentials=True,
-    allow_methods=["*"] ,
-    allow_headers=["*"],
-)
+app.add_middleware(DynamicCORSMiddleware)
 
 app.include_router(auth_router)
 app.include_router(questionnaire_router)
