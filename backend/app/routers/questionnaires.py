@@ -272,7 +272,10 @@ def submit(slug: str, req: SubmitRequest, request: Request, db: Session = Depend
         respondent = {**req.respondent, "_auth": identity}
     else:
         anon_id = request.cookies.get("anon_id") or secrets.token_hex(8)
-        identity = {"mode": "anonymous", "anon_id": anon_id, "label": f"Anonymous ({anon_id[:8]})"}
+        display = str(req.respondent.get("_display_name") or "").strip()
+        firm = str(req.respondent.get("_firm_name") or "").strip()
+        label = display or firm or f"Anonymous ({anon_id[:8]})"
+        identity = {"mode": "anonymous", "anon_id": anon_id, "label": label, "display_name": display, "firm_name": firm}
         respondent = {**req.respondent, "_anon": identity}
     resp = ResponseModel(
         questionnaire_id=q.id,
@@ -288,7 +291,7 @@ def submit(slug: str, req: SubmitRequest, request: Request, db: Session = Depend
     db.add(resp)
     db.commit()
     db.refresh(resp)
-    result = {"response_id": resp.id, "status": resp.status, "submitted_at": resp.submitted_at}
+    result = {"response_id": resp.id, "status": resp.status, "submitted_at": resp.submitted_at.isoformat() if resp.submitted_at else None}
     from fastapi.responses import JSONResponse
     jr = JSONResponse(result)
     if not user:

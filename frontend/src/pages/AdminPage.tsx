@@ -152,7 +152,9 @@ export function AdminPage() {
                     <div>
                       <div className="response-firm">
                         {r.respondent?._auth?.email ? <span>{r.respondent._auth.name || r.respondent._auth.email} <span className="muted" style={{fontWeight:400}}>({r.respondent._auth.email})</span></span>
-                          : r.respondent?._anon?.label || 'Anonymous respondent'}
+                          : (r.respondent?._display_name || r.respondent?._firm_name)
+                            ? <span>{r.respondent._display_name || 'Unnamed'}{r.respondent._firm_name ? <span className="muted" style={{fontWeight:400}}> — {r.respondent._firm_name}</span> : null}</span>
+                            : r.respondent?._anon?.label || r.respondent?.firm_practice_name || r.respondent?.your_name_optional || 'Anonymous respondent'}
                       </div>
                       <div className="muted">{new Date(r.submitted_at).toLocaleString()} · {r.respondent?._auth ? `Google verified` : `Anonymous${r.respondent?._anon?.anon_id ? ` · ID ${r.respondent._anon.anon_id}` : ''}`}</div>
                     </div>

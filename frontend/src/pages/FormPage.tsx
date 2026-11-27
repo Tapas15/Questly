@@ -127,6 +127,11 @@ export function FormPage() {
 
   const submit = async () => {
     if (!q) return;
+    if (authMode === 'optional' && !auth.user) {
+      const name = (respondent._display_name || '').trim();
+      const firm = (respondent._firm_name || '').trim();
+      if (!name && !firm) { setError('Please enter your name or firm name for anonymous submission, or sign in with Google.'); return; }
+    }
     setSubmitState('submitting'); setError('');
     try {
       await api.submit(slug, { respondent, answers, ai_instruction: instruction, accepted_ai: acceptedAI }, authMode);
@@ -202,9 +207,21 @@ export function FormPage() {
 
       <div className="card firm-card">
         <div className="section-kicker">Final Step</div>
-        <h2>Firm / respondent details <span className="optional-tag">(optional)</span></h2>
-        <p className="muted">Please share only the details you are comfortable providing. You may leave any field blank.</p>
+        <h2>Respondent details {authMode === 'optional' ? <span className="optional-tag">(name or firm helps identify you)</span> : <span className="optional-tag">(optional)</span>}</h2>
+        <p className="muted">
+          {authMode === 'optional'
+            ? 'Submitting anonymously? Please enter at least your name or firm name so your response can be identified. You can also sign in with Google above.'
+            : 'Signed-in responses are identified by your Google account. You may share additional firm details below.'}
+        </p>
         <div className="grid two firm-grid">
+          <label className="field">
+            <span className="field-label">Your name {authMode === 'optional' && !auth.user ? '*' : ''}</span>
+            <input className="input" value={respondent._display_name || ''} onChange={e => setRespondent(p => ({ ...p, _display_name: e.target.value }))} placeholder="e.g. Ankit Sharma" />
+          </label>
+          <label className="field">
+            <span className="field-label">Firm / practice name {authMode === 'optional' && !auth.user ? '*' : ''}</span>
+            <input className="input" value={respondent._firm_name || ''} onChange={e => setRespondent(p => ({ ...p, _firm_name: e.target.value }))} placeholder="e.g. K. Sharma & Associates" />
+          </label>
           {q.firm_fields.map(f => (
             <label key={f.id} className={`field ${f.type === 'single' ? 'field-full' : ''}`}>
               <span className="field-label">{f.label}</span>
