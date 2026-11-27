@@ -1,0 +1,27 @@
+# Backend
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+backend/data/
+backend/uploads/
+*.db
+*.sqlite3
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Git/OS/editor
+.git/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temp
+tmp_*.py
+doc_inspect.json
+doc_text.txt

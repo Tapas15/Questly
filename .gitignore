@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+frontend/dist/
+
+# App
+*.db
+*.sqlite3
+backend/uploads/
+backend/data/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temp
+tmp_*.py
+doc_inspect.json
+doc_text.txt
+
+cloudflared.exe
+cloudflared.out.log
+cloudflared.err.log
