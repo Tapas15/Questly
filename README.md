@@ -44,8 +44,8 @@ Free, open-source, AI-powered questionnaire app. Upload a `.docx` questionnaire,
 
 ### Run
 ```bash
-git clone https://github.com/Tapas15/formfill.git
-cd formfill
+git clone https://github.com/Tapas15/Questly.git
+cd Questly
 cp .env.example .env
 # edit .env (set ADMIN_TOKEN, PUBLIC_BASE_URL, FRONTEND_ORIGIN; optional Google/LLM)
 docker compose up --build -d
@@ -64,7 +64,7 @@ docker compose down
 
 ### Backend
 ```powershell
-cd formfill
+cd Questly
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r backend\requirements.txt
@@ -75,7 +75,7 @@ $env:PYTHONPATH='.'
 
 ### Frontend
 ```powershell
-cd formfill\frontend
+cd Questly\frontend
 npm install
 npm run dev
 ```
@@ -85,8 +85,8 @@ Dev UI: `http://localhost:5173` (proxies `/api` to backend).
 
 ```bash
 pkg install git -y
-git clone https://github.com/Tapas15/formfill.git
-cd formfill
+git clone https://github.com/Tapas15/Questly.git
+cd Questly
 chmod +x deploy-termux.sh
 ./deploy-termux.sh
 ```
