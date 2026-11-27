@@ -9,6 +9,21 @@ Free, open-source, AI-powered questionnaire app. Upload a `.docx` questionnaire,
 
 > **MIT Licensed — free for everyone to use, modify, and deploy.**
 
+## UI Preview
+
+| Admin Control Center | Respondent Form | Response Dashboard |
+|---|---|---|
+| ![Admin dashboard](docs/screenshots/admin.png) | ![Respondent form](docs/screenshots/form.png) | ![Analytics dashboard](docs/screenshots/dashboard.png) |
+
+### UI/UX Highlights
+
+- **Clean premium layout** — card-based sections, clear spacing, and readable typography for long questionnaires.
+- **Guided respondent flow** — sample draft selector, AI autofill, manual edit/accept/reject, and final review before submit.
+- **Dual access modes** — authenticated Google link for verified identity, anonymous link for open collection with name/firm/ID capture.
+- **Admin operations** — upload DOCX, copy share links, load responses, export CSV/XLSX, delete questionnaires.
+- **Insights dashboard** — aggregate MCQ distribution bars, descriptive response review, individual vs all-response view.
+- **Responsive design** — usable on desktop and mobile screens.
+
 ## Features
 
 - **DOCX upload & parsing** — extracts single-choice, multi-choice, and descriptive questions (`python-docx`).
