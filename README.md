@@ -1,64 +1,55 @@
-# AI-Powered Word Questionnaire
+# AI Word Questionnaire
 
-Simple, responsive app for uploading a Word questionnaire, extracting questions, sharing a public form link, generating AI suggestions, collecting responses, and downloading them.
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-ready-blue.svg)](docker-compose.yml)
+[![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688.svg)](backend/)
+[![React](https://img.shields.io/badge/React-frontend-61dafb.svg)](frontend/)
 
-## Stack
+Free, open-source, AI-powered questionnaire app. Upload a `.docx` questionnaire, auto-extract questions, share public links, collect responses with optional Google sign-in, generate AI-assisted drafts, and view a beautiful response dashboard.
 
-- Frontend: React + TypeScript + Vite
-- Backend: Python FastAPI
-- Word parsing: `python-docx`
-- DB: SQLite by default, PostgreSQL supported via `DATABASE_URL`
-- AI: Ollama or configurable OpenAI-compatible API (Kilo/OpenAI-style `/chat/completions`)
+> **MIT Licensed — free for everyone to use, modify, and deploy.**
 
-## What it supports
+## Features
 
-- Upload `.docx` questionnaire and extract questions/options/descriptive fields
-- Verified against included `CA_Accounting_Firm_Problem_Validation_Questionnaire.docx` (42 questions: 35 choice, 7 descriptive)
-- **SSO login (Google/Microsoft)**: optional OAuth sign-in on public form; signed-in identity attached to submitted response. Configure `GOOGLE_*` / `MICROSOFT_*` env vars; set `AUTH_REQUIRED_FOR_SUBMIT=true` to require sign-in.
-- **Dynamic sample prefill**: each load/regenerate creates a different questionnaire-based sample draft covering all 42 questions; “Fill example from my input” adapts sample choices/text to the instruction box. Users can edit/select before submit.
-- Public respondent form URL: `/q/{slug}`
-- Firm/respondent detail fields (optional, at end of form)
-- MCQ radio/checkbox rendering, `Other` text inputs, max-selection limits
-- Top AI instruction box: “Tell AI what you want to fill in this questionnaire”
-- Per-descriptive-question AI help button
-- Accept/reject/edit AI suggestions; manual edits preserved
-- Submit response + confirmation
-- Admin dashboard: response cards, MCQ + descriptive answer view, CSV/XLSX export
-- Shareable read-only view: `/s/{share_token}` shows respondent MCQ selections and descriptive answers
-- Delete questionnaire (admin)
+- **DOCX upload & parsing** — extracts single-choice, multi-choice, and descriptive questions (`python-docx`).
+- **Public respondent links** — share `/q/{slug}`; authenticated (Google required) or anonymous (`?auth=open`) mode.
+- **Google SSO (optional)** — verified respondent identity; anonymous submissions get a stable anonymous ID and optional name/firm.
+- **Single response per user** — same Google user or anonymous browser can reopen and update their response.
+- **AI autofill** — Ollama or OpenAI-compatible provider; suggestions only from user context, no invented facts.
+- **Sample drafts** — 3 built-in profile samples + random draft; auto-fills all 42 questions for review/edit.
+- **Admin dashboard** — upload, manage, copy links, load responses, export CSV/XLSX.
+- **Response dashboard** — aggregate MCQ distribution charts, descriptive answer review, individual/aggregate toggle.
+- **Share view** — read-only `/s/{share_token}` with MCQ + descriptive answers.
+- **Docker + Termux** — one-command Docker deploy; Termux script for Android.
 
-## Project structure
+## Quick Start (Docker, recommended)
 
-```text
-backend/         FastAPI app, parser, DB models, AI/export services
-frontend/        React+TS app
-deploy-termux.sh Termux end-to-end install/deploy script
-docker-compose.yml
-CA_Accounting_Firm_Problem_Validation_Questionnaire.docx
-```
+### Prerequisites
+- Docker Desktop / Docker Engine + Docker Compose
 
-## Quick start (Docker)
-
-```powershell
-cd C:\Users\Tapas\Documents\projects\formfill
-Copy-Item .env.example .env
-# edit .env as needed
+### Run
+```bash
+git clone https://github.com/Tapas15/formfill.git
+cd formfill
+cp .env.example .env
+# edit .env (set ADMIN_TOKEN, PUBLIC_BASE_URL, FRONTEND_ORIGIN; optional Google/LLM)
 docker compose up --build -d
 ```
 
-- Frontend/Admin: http://localhost:8080
-- Backend health: http://localhost:8000/api/health
-- Public form: http://localhost:8080/q/{slug}
-- Share view (MCQ+descriptive): http://localhost:8080/s/{share_token}
+Open:
+- Admin: `http://localhost:8080`
+- API health: `http://localhost:8000/api/health`
 
-Stop: `docker compose down`
+Stop:
+```bash
+docker compose down
+```
 
-## Local dev setup
+## Local Development
 
-### 1. Backend
-
+### Backend
 ```powershell
-cd C:\Users\Tapas\Documents\projects\formfill
+cd formfill
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r backend\requirements.txt
@@ -67,95 +58,115 @@ $env:PYTHONPATH='.'
 .\.venv\Scripts\python -m uvicorn backend.app.main:app --reload --port 8000
 ```
 
-### 2. Frontend
-
+### Frontend
 ```powershell
-cd C:\Users\Tapas\Documents\projects\formfill\frontend
+cd formfill\frontend
 npm install
 npm run dev
 ```
+Dev UI: `http://localhost:5173` (proxies `/api` to backend).
 
-## Termux deployment (Android)
-
-`deploy-termux.sh` performs end-to-end install and deployment in Termux.
+## Termux (Android)
 
 ```bash
 pkg install git -y
-# copy/clone this project into Termux
+git clone https://github.com/Tapas15/formfill.git
 cd formfill
 chmod +x deploy-termux.sh
 ./deploy-termux.sh
 ```
 
-The script:
-- updates/upgrades Termux packages
-- installs `python nodejs-lts git openssl clang make pkg-config libffi`
-- creates `.venv`, installs backend requirements
-- creates `.env` if missing and sets local defaults
-- builds frontend (`npm install && npm run build`)
-- creates `start-termux.sh` and `stop-termux.sh`
-- starts backend (`uvicorn`, port 8000) and frontend static server (`python -m http.server`, port 8080)
+Script installs deps, builds frontend, creates `.env` if missing, and starts backend/frontend.  
+Manage: `./start-termux.sh` / `./stop-termux.sh`  
+Logs: `.run/backend.log`, `.run/frontend.log`
 
-After deploy:
-- Admin/local: `http://localhost:8080`
-- LAN: `http://<phone-ip>:8080`
-- Logs: `.run/backend.log`, `.run/frontend.log`
-- Stop: `./stop-termux.sh`
-- Start again: `./start-termux.sh`
+## Configuration (`.env`)
 
-For external access, use a tunnel/reverse proxy and set `PUBLIC_BASE_URL` and `FRONTEND_ORIGIN` in `.env`.
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `sqlite:///./backend/data/app.db` | SQLite default; set PostgreSQL URL for Postgres. |
+| `ADMIN_TOKEN` | `changeme` | Admin API token for upload/export/delete/responses. |
+| `FRONTEND_ORIGIN` | `http://localhost:5173` | CORS origin / deployed frontend URL. |
+| `PUBLIC_BASE_URL` | `http://localhost:5173` | Public base URL used in generated links. |
+| `LLM_PROVIDER` | `ollama` | `ollama` or `openai_compatible`. |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint. Docker: `http://host.docker.internal:11434`. |
+| `OLLAMA_MODEL` | `llama3.1` | Ollama model. |
+| `LLM_API_KEY` | empty | API key for OpenAI-compatible provider. |
+| `LLM_BASE_URL` | empty | e.g. `https://api.kilo.ai/api/gateway`. |
+| `LLM_MODEL` | `gpt-4o-mini` | Model id for compatible provider. |
+| `SESSION_SECRET` | `change-this-session-secret` | Strong random secret for auth sessions. |
+| `AUTH_REQUIRED_FOR_SUBMIT` | `false` | Require sign-in before submit. |
+| `AUTH_REQUIRED_PROVIDER` | `google` | `google`, `microsoft`, or `any`. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | empty | Google OAuth credentials. |
+| `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` | empty | Microsoft OAuth credentials. |
+| `MICROSOFT_TENANT` | `common` | Microsoft tenant. |
 
-## Public sharing with required Google login
+## Google Sign-In Setup (public authenticated link)
 
-1. Set env vars in `.env`:
+1. Set in `.env`:
    ```env
-   PUBLIC_BASE_URL=https://your-public-domain
-   FRONTEND_ORIGIN=https://your-public-domain
+   PUBLIC_BASE_URL=https://your-domain
+   FRONTEND_ORIGIN=https://your-domain
    SESSION_SECRET=<strong-random-secret>
    AUTH_REQUIRED_FOR_SUBMIT=true
    AUTH_REQUIRED_PROVIDER=google
-   GOOGLE_CLIENT_ID=<from Google Cloud Console>
-   GOOGLE_CLIENT_SECRET=<from Google Cloud Console>
+   GOOGLE_CLIENT_ID=<client-id>
+   GOOGLE_CLIENT_SECRET=<client-secret>
    ```
-2. Create Google OAuth credentials (Google Cloud Console → APIs & Services → Credentials → OAuth client ID → Web application). Add authorized redirect URI:
-   - `https://your-public-domain/api/auth/callback/google`
-3. Restart: `docker compose up --build -d`
-4. Share the Admin public form URL (`/q/{slug}`). Respondents must click **Continue with Google** and sign in before submitting. Their verified Google email/name is attached to the response.
+2. In Google Cloud Console → APIs & Services → Credentials → OAuth client (Web app), add redirect URI:
+   ```
+   https://your-domain/api/auth/callback/google
+   ```
+3. Redeploy: `docker compose up --build -d`
+4. Share Admin’s **Authenticated link**. Respondents sign in with Google before submit; identity is attached to response.
 
-For Cloudflare quick tunnels the URL changes on restart; update `PUBLIC_BASE_URL`, `FRONTEND_ORIGIN`, and the Google redirect URI when it changes. Use a named Cloudflare tunnel or fixed domain for stable public sharing.
+> Cloudflare quick tunnels change URL on restart. Update `PUBLIC_BASE_URL`, `FRONTEND_ORIGIN`, and Google redirect URI when URL changes. Use a named tunnel/custom domain for stable public sharing.
 
-## Environment variables
+## Usage
 
-| Variable | Default | Notes |
-|---|---|---|
-| `DATABASE_URL` | `sqlite:///./backend/data/app.db` | Use PostgreSQL URL for Postgres |
-| `ADMIN_TOKEN` | `changeme` | Required for admin APIs/exports/delete |
-| `FRONTEND_ORIGIN` | `http://localhost:5173` | CORS origin; set to deployed frontend URL |
-| `PUBLIC_BASE_URL` | `http://localhost:5173` | Used for generated share links |
-| `LLM_PROVIDER` | `ollama` | `ollama` or `openai_compatible` |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server; Docker: `http://host.docker.internal:11434` |
-| `OLLAMA_MODEL` | `llama3.1` | Ollama model |
-| `LLM_API_KEY` | empty | OpenAI-compatible/Kilo API key |
-| `LLM_BASE_URL` | empty | e.g. `https://api.kilo.ai/api/gateway` |
-| `SESSION_SECRET` | `change-this-session-secret` | Session cookie signing secret; set a strong random value in prod |
-| `AUTH_REQUIRED_FOR_SUBMIT` | `false` | When `true`, respondent must sign in before submit |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | empty | Enable Google SSO |
-| `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` | empty | Enable Microsoft SSO |
-| `MICROSOFT_TENANT` | `common` | Microsoft tenant (`common`, `organizations`, or tenant id) |
+1. Open Admin (`/`), enter `ADMIN_TOKEN`.
+2. Upload `.docx` questionnaire.
+3. Copy links from Admin:
+   - **Authenticated link**: `/q/{slug}` — Google sign-in required.
+   - **Anonymous link**: `/q/{slug}?auth=open` — no sign-in; name/firm requested for identification.
+   - **Share view**: `/s/{share_token}` — read-only MCQ+descriptive summary.
+4. Respondent fills/edits answers; can use sample drafts or AI suggestions; submits. Same user can reopen and update their response.
+5. Admin loads responses, exports CSV/XLSX, or opens **Dashboard** (`/dashboard/{slug}`) for aggregate/individual insights.
 
-## AI safety behavior
+## API (main)
 
-- Uses only respondent instruction/context.
-- Selects MCQ options only when supported.
-- Generates descriptive answers only when supported.
-- Leaves unknown answers blank.
-- Never invents company details.
-- Invalid/unmatched MCQ option values are discarded server-side.
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/questionnaires/upload` | Admin | Upload/parse DOCX |
+| GET | `/api/questionnaires` | Admin | List questionnaires |
+| GET | `/api/questionnaires/{slug}` | Public | Get questionnaire + sample prefill |
+| GET | `/api/questionnaires/{slug}/sample?profile=` | Public | Random or profile sample draft |
+| POST | `/api/questionnaires/{slug}/suggest-all` | Public | AI suggestions for all questions |
+| POST | `/api/questionnaires/{slug}/submit?auth=required|optional` | Public/session | Submit or update own response |
+| GET | `/api/questionnaires/{slug}/my-response` | Session | Get current user's existing response |
+| GET | `/api/questionnaires/{slug}/responses` | Admin | List responses |
+| GET | `/api/questionnaires/{slug}/responses.csv|xlsx` | Admin | Export |
+| GET | `/api/share/{token}` | Public | Read-only share view |
+| GET | `/api/auth/providers` `/login/*` `/callback/*` `/me` `/logout` | Public | OAuth/session auth |
 
-## Verification
+## Security & Privacy Notes
 
-```powershell
-$env:PYTHONPATH='.'
-.\.venv\Scripts\python -c "from backend.tests.test_parser import test_parse_questionnaire_counts; test_parse_questionnaire_counts(); print('ok')"
-cd frontend; npm run build
+- Do not commit `.env` or real API keys. `.gitignore` excludes `.env`, data, uploads, logs.
+- Set strong `ADMIN_TOKEN` and `SESSION_SECRET` in production.
+- Google/Microsoft OAuth secrets must be kept server-side.
+- Anonymous responses are identified by cookie-based anon ID and optional name/firm; not identity-proof.
+- AI suggestions are sanitized server-side; invalid MCQ values discarded; no invented facts instructed.
+
+## Development
+
+```bash
+# backend parser smoke test
+$env:PYTHONPATH='.'; python -c "from backend.tests.test_parser import test_parse_questionnaire_counts; test_parse_questionnaire_counts(); print('ok')"
+
+# frontend build
+cd frontend && npm run build
 ```
+
+## License
+
+[MIT](LICENSE) — free for everyone to use, modify, distribute, and commercialize, with attribution and no warranty.

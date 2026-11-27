@@ -336,6 +336,9 @@ def my_response(slug: str, request: Request, db: Session = Depends(get_db)):
     payload = json.loads(resp.answers_json)
     respondent = json.loads(resp.respondent_json)
     return {"response": {"id": resp.id, "submitted_at": resp.submitted_at, "respondent": respondent, "answers": payload.get("answers", {}), "accepted_ai": payload.get("accepted_ai", {}), "ai_instruction": resp.ai_instruction, "status": resp.status}}
+
+
+@router.get("/questionnaires/{slug}/responses")
 def list_responses(slug: str, db: Session = Depends(get_db), x_admin_token: str | None = Header(default=None)):
     _require_admin(x_admin_token)
     q = db.scalar(select(Questionnaire).where(Questionnaire.public_slug == slug))

@@ -116,6 +116,7 @@ export function AdminPage() {
           <div className="row gap mt">
             <Link className="btn" to={`/q/${selected.public_slug}`}>Open authenticated form</Link>
             <Link className="btn secondary" to={`/q/${selected.public_slug}?auth=open`}>Open anonymous form</Link>
+            <Link className="btn secondary" to={`/dashboard/${selected.public_slug}`}>Dashboard</Link>
             {selected.share_token && <Link className="btn secondary" to={`/s/${selected.share_token}`}>Open share view</Link>}
             <button className="btn secondary" onClick={() => openResponses(selected)}>Load responses</button>
             <a className="btn secondary" href={api.exportCsvUrl(selected.public_slug)} onClick={(e) => { e.preventDefault(); setAdminToken(token); api.exportWithToken(selected.public_slug, 'csv').catch(err => setError(err.message)); }}>CSV</a>
