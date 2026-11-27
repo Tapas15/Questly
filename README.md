@@ -56,8 +56,10 @@ Check status / print URLs:
 ```bash
 docker compose ps
 curl http://localhost:8080/api/health   # {"ok":true}
-docker compose logs --tail=30 backend   # startup prints Admin + Google OAuth redirect URL
+docker compose logs --tail=40 backend   # startup logs include Admin + Google OAuth redirect URL
 docker compose run --rm urls            # writes starting.log (Admin + Google OAuth redirect + Cloudflare placeholder)
+powershell -ExecutionPolicy Bypass -File scripts/update-starting-log.ps1  # refresh starting.log with current cloudflared URL
+Get-Content starting.log
 ```
 
 Open:
@@ -115,30 +117,31 @@ What `deploy-termux.sh` does:
 - Builds frontend and creates `start-termux.sh` / `stop-termux.sh`
 - Starts backend + frontend
 
-### Start / stop
+### Start / stop / logs
 
 ```bash
-./start-termux.sh
+./start-termux.sh    # prints URLs and writes starting.log
 ./stop-termux.sh
+cat starting.log
+tail -f .run/backend.log
 ```
 
-### URLs printed by `start-termux.sh`
+### URLs / `starting.log`
 
-The script prints available URLs:
-- **Local**: `http://localhost:8080/`, `/api/health`, `/q/<slug>`, `/q/<slug>?auth=open`, `/dashboard/<slug>`
-- **LAN**: `http://<phone-ip>:8080/...` (same paths)
-- **Cloudflare quick tunnel** (if `cloudflared` installed): prints new `https://<random>.trycloudflare.com/...` URLs and the Google OAuth redirect URI to add.
+`./start-termux.sh` prints URLs and writes `starting.log` with:
+- `Admin Dashboard`
+- `Google OAuth Redirect URL`
+- `Cloudflare URL` (or `(not started)` if cloudflared not detected)
 
 Install cloudflared on Termux if needed:
 ```bash
 pkg install cloudflared -y
 ```
 
-> Quick tunnel URL changes every restart. The app accepts the new URL automatically (no `.env` change needed). For Google sign-in, add the newly printed redirect URI: `https://<new-url>/api/auth/callback/google`.
-> After starting cloudflared, refresh `starting.log`: `powershell -ExecutionPolicy Bypass -File scripts/update-starting-log.ps1` (Windows) or `bash scripts/update-starting-log.sh` if added. `docker compose run --rm urls` writes the local/base Admin + Google OAuth redirect entries.
+> Quick tunnel URL changes every restart. The app accepts the new URL automatically (no `.env` change needed). For Google sign-in, add the redirect URI from `starting.log` in Google Cloud Console.
 > Data persists in `backend/data` and `backend/uploads`.
 
-Logs: `.run/backend.log`, `.run/frontend.log`, `.run/cloudflared.log`
+Logs: `.run/backend.log`, `.run/frontend.log`, `.run/cloudflared.log`, `starting.log`
 
 ## Configuration (`.env`)
 
@@ -305,6 +308,26 @@ Questly sends structured JSON:
 - `raw_answers`: original answer values
 
 This gives both a readable Sheets row and machine-friendly fields.
+
+### 4) Test webhook / Excel/Sheets
+
+1. Set env and restart backend:
+   ```bash
+   # .env
+   RESPONSE_WEBHOOK_URL=https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec
+   RESPONSE_WEBHOOK_SECRET=<same-as-SHARED_SECRET>
+   RESPONSE_WEBHOOK_ENABLED=true
+   docker compose up -d --build backend
+   ```
+2. Submit a test response from the form.
+3. Check submit API response includes `"webhook":{"sent":true,...}"`.
+4. Check backend logs:
+   ```bash
+   docker compose logs --tail=100 backend | grep webhook
+   ```
+5. Confirm a new row appears in Google Sheet. If using Excel via connected sheet/Power Query, refresh/import from that sheet.
+
+If `sent:false`: verify secret matches, Apps Script deployed as latest Web app version, and access allows webhook POST (usually `Anyone`).
 
 ## Usage
 
