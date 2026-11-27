@@ -57,7 +57,7 @@ Check status / print URLs:
 docker compose ps
 curl http://localhost:8080/api/health   # {"ok":true}
 docker compose logs --tail=30 backend   # startup prints Admin + Google OAuth redirect URL
-docker compose run --rm urls            # prints Admin Dashboard + Google OAuth redirect URL
+docker compose run --rm urls            # writes starting.log (Admin + Google OAuth redirect + Cloudflare placeholder)
 ```
 
 Open:
@@ -135,6 +135,7 @@ pkg install cloudflared -y
 ```
 
 > Quick tunnel URL changes every restart. The app accepts the new URL automatically (no `.env` change needed). For Google sign-in, add the newly printed redirect URI: `https://<new-url>/api/auth/callback/google`.
+> After starting cloudflared, refresh `starting.log`: `powershell -ExecutionPolicy Bypass -File scripts/update-starting-log.ps1` (Windows) or `bash scripts/update-starting-log.sh` if added. `docker compose run --rm urls` writes the local/base Admin + Google OAuth redirect entries.
 > Data persists in `backend/data` and `backend/uploads`.
 
 Logs: `.run/backend.log`, `.run/frontend.log`, `.run/cloudflared.log`

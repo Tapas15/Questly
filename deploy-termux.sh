@@ -115,7 +115,12 @@ if [ -n "$SLUG" ]; then
 else
   echo "Form:                  upload a .docx in Admin first, then /q/<slug>"
 fi
-echo "============================================
+echo "============================================"
+cat > starting.log <<LOG
+Admin Dashboard: $BASE_LOCAL/
+Google OAuth Redirect URL: $BASE_LOCAL/api/auth/callback/google
+Cloudflare URL: (not started)
+LOG
 
 if [ -n "$BASE_NET" ]; then
   echo ""
@@ -155,6 +160,12 @@ if command -v cloudflared >/dev/null 2>&1; then
       echo "============================================"
       echo "Add this in Google Cloud Console > OAuth client > Authorized redirect URIs:"
       echo "  $TURL/api/auth/callback/google"
+      cat > starting.log <<LOG
+Admin Dashboard: $TURL/
+Google OAuth Redirect URL: $TURL/api/auth/callback/google
+Cloudflare URL: $TURL
+LOG
+      echo "Saved URLs to starting.log"
       break
     fi
     sleep 1

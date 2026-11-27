@@ -48,26 +48,21 @@ services:
     environment:
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-}
+    volumes:
+      - ./:/out
     command:
       - sh
       - -c
       - |
         BASE="$${PUBLIC_BASE_URL:-$${FRONTEND_ORIGIN:-http://localhost:8080}}"
         BASE="$${BASE%/}"
-        echo ""
-        echo "============================================"
-        echo " Questly URLs"
-        echo "============================================"
-        echo "Admin Dashboard:       $$BASE/"
-        echo "API Health:            $$BASE/api/health"
-        echo "Public form:           $$BASE/q/<slug>  (after DOCX upload)"
-        echo "Anonymous form:        $$BASE/q/<slug>?auth=open"
-        echo "Dashboard:             $$BASE/dashboard/<slug>"
-        echo "Google OAuth Redirect: $$BASE/api/auth/callback/google"
-        echo "============================================"
-        echo "Add the Google OAuth Redirect URI above in Google Cloud Console."
-        echo "If using quick tunnel, replace base with current tunnel URL and add that callback URI."
-        echo ""
+        cat > /out/starting.log <<EOF
+        Admin Dashboard: $$BASE/
+        Google OAuth Redirect URL: $$BASE/api/auth/callback/google
+        Cloudflare URL: (run cloudflared tunnel --url http://localhost:8080 to detect)
+        EOF
+        echo "Wrote starting.log"
+        cat /out/starting.log
 
 volumes:
   backend_data:
