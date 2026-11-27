@@ -105,6 +105,25 @@ After deploy:
 
 For external access, use a tunnel/reverse proxy and set `PUBLIC_BASE_URL` and `FRONTEND_ORIGIN` in `.env`.
 
+## Public sharing with required Google login
+
+1. Set env vars in `.env`:
+   ```env
+   PUBLIC_BASE_URL=https://your-public-domain
+   FRONTEND_ORIGIN=https://your-public-domain
+   SESSION_SECRET=<strong-random-secret>
+   AUTH_REQUIRED_FOR_SUBMIT=true
+   AUTH_REQUIRED_PROVIDER=google
+   GOOGLE_CLIENT_ID=<from Google Cloud Console>
+   GOOGLE_CLIENT_SECRET=<from Google Cloud Console>
+   ```
+2. Create Google OAuth credentials (Google Cloud Console → APIs & Services → Credentials → OAuth client ID → Web application). Add authorized redirect URI:
+   - `https://your-public-domain/api/auth/callback/google`
+3. Restart: `docker compose up --build -d`
+4. Share the Admin public form URL (`/q/{slug}`). Respondents must click **Continue with Google** and sign in before submitting. Their verified Google email/name is attached to the response.
+
+For Cloudflare quick tunnels the URL changes on restart; update `PUBLIC_BASE_URL`, `FRONTEND_ORIGIN`, and the Google redirect URI when it changes. Use a named Cloudflare tunnel or fixed domain for stable public sharing.
+
 ## Environment variables
 
 | Variable | Default | Notes |

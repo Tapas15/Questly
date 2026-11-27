@@ -251,7 +251,9 @@ def submit(slug: str, req: SubmitRequest, request: Request, db: Session = Depend
         raise HTTPException(status_code=404, detail="Questionnaire not found")
     user = _get_session_user(request, db)
     if settings.auth_required_for_submit and not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
+        raise HTTPException(status_code=401, detail="Please sign in with Google to submit your response.")
+    if settings.auth_required_for_submit and settings.auth_required_provider != "any" and user and user.provider != settings.auth_required_provider:
+        raise HTTPException(status_code=401, detail=f"Please sign in with {settings.auth_required_provider.title()} to submit your response.")
     respondent = req.respondent
     if user:
         respondent = {**req.respondent, "_auth": {"provider": user.provider, "email": user.email, "name": user.name, "user_id": user.id}}

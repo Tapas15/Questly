@@ -153,8 +153,8 @@ export function FormPage() {
           ) : (
             <>
               {auth.providers.length ? auth.providers.map(p => (
-                <a key={p.id} className="btn secondary" href={`/api/auth/login/${p.id}?next=${encodeURIComponent(`/q/${slug}`)}`}>Continue with {p.label}</a>
-              )) : <span className="muted">SSO not configured. Set Google/Microsoft OAuth env vars in backend.</span>}
+                <a key={p.id} className="btn" href={`/api/auth/login/${p.id}?next=${encodeURIComponent(`/q/${slug}`)}`}>Continue with {p.label}</a>
+              )) : <span className="muted">Google sign-in is required but not configured. Admin: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env, then redeploy.</span>}
             </>
           )}
         </div>
@@ -205,7 +205,7 @@ export function FormPage() {
       <div className="card submit-bar">
         <div>
           <div className="submit-title">Ready to submit?</div>
-          <div className="muted">{auth.required && !auth.user ? 'Sign in with Google/Microsoft before submitting.' : 'Review your answers. AI suggestions are only included if you accepted or edited them.'}</div>
+          <div className="muted">{auth.required && !auth.user ? 'Sign in with Google before submitting your response.' : 'Review your answers. AI suggestions are only included if you accepted or edited them.'}</div>
         </div>
         <button className="btn submit-btn" onClick={submit} disabled={submitState === 'submitting' || (auth.required && !auth.user)}>{submitState === 'submitting' ? 'Submitting...' : 'Submit response'}</button>
       </div>

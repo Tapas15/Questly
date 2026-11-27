@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     microsoft_client_secret: str = ""
     microsoft_tenant: str = "common"
     auth_required_for_submit: bool = False
+    auth_required_provider: str = "google"  # google | microsoft | any
 
 
 settings = Settings()

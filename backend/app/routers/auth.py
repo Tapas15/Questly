@@ -60,7 +60,11 @@ def get_current_user(request: Request, db: Session) -> User | None:
 
 @router.get("/providers")
 def providers():
-    return {"providers": _providers(), "auth_required_for_submit": settings.auth_required_for_submit}
+    provs = _providers()
+    required = settings.auth_required_provider if settings.auth_required_for_submit else "none"
+    if settings.auth_required_for_submit and settings.auth_required_provider != "any":
+        provs = [p for p in provs if p["id"] == settings.auth_required_provider]
+    return {"providers": provs, "auth_required_for_submit": settings.auth_required_for_submit, "required_provider": required}
 
 
 @router.get("/me")
@@ -70,8 +74,11 @@ def me(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/login/{provider}")
 async def login(provider: str, request: Request, next: str = "/"):
-    if provider not in {p["id"] for p in _providers()}:
-        raise HTTPException(status_code=404, detail="Auth provider not configured")
+    allowed = {p["id"] for p in _providers()}
+    if settings.auth_required_for_submit and settings.auth_required_provider != "any":
+        allowed = {settings.auth_required_provider} & allowed
+    if provider not in allowed:
+        raise HTTPException(status_code=404, detail=f"{provider.title()} login is not configured. Set {provider.upper()}_CLIENT_ID and {provider.upper()}_CLIENT_SECRET in .env.")
     request.session["auth_next"] = next if next.startswith("/") else "/"
     redirect_uri = str(request.url_for("auth_callback", provider=provider))
     # behind reverse proxy/tunnel, prefer public base
