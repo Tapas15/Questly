@@ -41,9 +41,10 @@ export const api = {
     const data = await request<{ questionnaire: Questionnaire & { sample_prefill?: any } }>(`/api/questionnaires/${slug}`);
     return data.questionnaire;
   },
-  getQuestionnaireSample: async (slug: string): Promise<any> => {
-    const data = await request<{ sample_prefill: any }>(`/api/questionnaires/${slug}/sample`);
-    return data.sample_prefill;
+  getQuestionnaireSample: async (slug: string, profile?: string): Promise<{ sample_prefill: any; profiles?: any[] }> => {
+    const q = profile ? `?profile=${encodeURIComponent(profile)}` : '';
+    const data = await request<{ sample_prefill: any; profiles?: any[] }>(`/api/questionnaires/${slug}/sample${q}`);
+    return data;
   },
   listQuestionnaires: async (): Promise<Questionnaire[]> => {
     const data = await request<{ questionnaires: Questionnaire[] }>('/api/questionnaires', {}, true);

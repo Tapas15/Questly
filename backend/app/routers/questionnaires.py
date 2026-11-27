@@ -107,15 +107,25 @@ def get_questionnaire(slug: str, db: Session = Depends(get_db)):
 
 
 @router.get("/questionnaires/{slug}/sample")
-def get_questionnaire_sample(slug: str, db: Session = Depends(get_db)):
-    """Return a fresh random sample draft for the questionnaire."""
+def get_questionnaire_sample(slug: str, profile: str | None = None, db: Session = Depends(get_db)):
+    """Return a sample draft. If profile=ankit|priya|rohan, return that profile's filled draft."""
     q = db.scalar(select(Questionnaire).where(Questionnaire.public_slug == slug))
     if not q:
         raise HTTPException(status_code=404, detail="Questionnaire not found")
     schema = json.loads(q.schema_json)
-    from ..services.autofill import build_sample_prefill
+    questions = schema.get("questions", [])
+    firm_fields = schema.get("firm_fields", [])
+    from ..services.autofill import build_sample_prefill, build_prefill_from_instruction, SAMPLE_PROFILES
+    if profile:
+        p = next((x for x in SAMPLE_PROFILES if x["id"] == profile), None)
+        if p:
+            prefill = build_prefill_from_instruction(questions, firm_fields, p["instruction"])
+            prefill["profile_id"] = p["id"]
+            prefill["profile_label"] = p["label"]
+            return {"sample_prefill": prefill, "profiles": SAMPLE_PROFILES}
     import uuid
-    return {"sample_prefill": build_sample_prefill(schema.get("questions", []), schema.get("firm_fields", []), seed=str(uuid.uuid4()))}
+    prefill = build_sample_prefill(questions, firm_fields, seed=str(uuid.uuid4()))
+    return {"sample_prefill": prefill, "profiles": SAMPLE_PROFILES}
 
 
 @router.get("/share/{token}")

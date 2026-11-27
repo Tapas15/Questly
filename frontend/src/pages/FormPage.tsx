@@ -21,13 +21,21 @@ export function FormPage() {
   const [qAiLoading, setQAiLoading] = useState<string | null>(null);
   const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'done'>('idle');
   const [auth, setAuth] = useState<{ providers: { id: string; label: string }[]; user: any | null; required: boolean }>({ providers: [], user: null, required: false });
+  const [sampleProfiles, setSampleProfiles] = useState<any[]>([]);
+  const [selectedProfile, setSelectedProfile] = useState('');
 
   useEffect(() => { (async () => {
     try {
-      const [data, prov, me] = await Promise.all([api.getQuestionnaire(slug), api.getAuthProviders().catch(() => ({ providers: [], auth_required_for_submit: false })), api.getMe().catch(() => ({ user: null }))]);
+      const [data, prov, me, sample] = await Promise.all([
+        api.getQuestionnaire(slug),
+        api.getAuthProviders().catch(() => ({ providers: [], auth_required_for_submit: false })),
+        api.getMe().catch(() => ({ user: null })),
+        api.getQuestionnaireSample(slug).catch(() => ({ sample_prefill: null, profiles: [] })),
+      ]);
       setQ(data);
       const required = authMode === 'required' ? !!prov.auth_required_for_submit : false;
       setAuth({ providers: prov.providers || [], required, user: me.user || null });
+      setSampleProfiles(sample.profiles || []);
       const prefill = (data as any).sample_prefill;
       if (prefill?.answers) {
         setAnswers(prefill.answers);
@@ -61,17 +69,20 @@ export function FormPage() {
     setSuggestions({});
     setAcceptedAI({});
   };
-  const loadSample = async () => {
+  const loadSample = async (profileId?: string) => {
     if (!q) return;
     try {
-      const prefill = await api.getQuestionnaireSample(slug);
+      const res = await api.getQuestionnaireSample(slug, profileId);
+      const prefill = res.sample_prefill;
       if (prefill?.answers) {
         setAnswers(prefill.answers);
         setOriginalAnswers(prefill.answers);
         setSuggestions({});
         setAcceptedAI({});
         setInstruction(prefill.instruction || '');
-        setRespondent(prefill.respondent || {});
+        setRespondent(prev => ({ ...prev, ...(prefill.respondent || {}) }));
+        if (profileId) setSelectedProfile(profileId);
+        if (res.profiles) setSampleProfiles(res.profiles);
       }
     } catch (e: any) { setError(e.message); }
   };
@@ -165,13 +176,17 @@ export function FormPage() {
             </>
           )}
         </div>
-        <textarea className="input textarea mt" value={instruction} onChange={e => setInstruction(e.target.value)} placeholder="Describe your firm/context. Example: I run a CA firm providing GST, income tax, accounting and auditing services. We use Tally and Excel. Our biggest challenge is manual reconciliation." />
-        <div className="row gap mt">
-          <button className="btn" onClick={generateAll} disabled={aiLoading || !instruction.trim()}>{aiLoading ? 'Generating suggestions...' : 'Generate suggestions from my input'}</button>
+        <textarea className="input textarea mt" value={instruction} onChange={e => setInstruction(e.target.value)} placeholder="Describe your firm/context. Example: I run a CA firm providing GST, income tax, accounting and auditing services..." />
+        <div className="row gap mt" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+          <select className="input" style={{ maxWidth: 360 }} value={selectedProfile} onChange={e => setSelectedProfile(e.target.value)}>
+            <option value="">Select a sample draft...</option>
+            {sampleProfiles.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+          <button className="btn" onClick={() => loadSample(selectedProfile || undefined)} disabled={aiLoading}>{selectedProfile ? 'Generate & fill from selected sample' : 'Generate new sample draft'}</button>
+          <button className="btn secondary" onClick={generateAll} disabled={aiLoading || !instruction.trim()}>{aiLoading ? 'Generating suggestions...' : 'Generate suggestions from my input'}</button>
           <button className="btn secondary" onClick={fillFromInput} disabled={aiLoading || !instruction.trim()}>Fill example from my input</button>
-          <button className="btn secondary" onClick={loadSample} disabled={aiLoading}>Generate new sample draft</button>
-          <span className="muted">Samples are examples only; review and modify before submitting.</span>
         </div>
+        <div className="muted mt" style={{ fontSize: 13 }}>Select a sample to auto-fill all questionnaire fields below, or write your own context and use the input buttons. Review and edit every answer before submitting.</div>
         {error && <div className="error mt">{error}</div>}
       </div>
 
