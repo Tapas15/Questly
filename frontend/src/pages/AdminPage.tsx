@@ -132,7 +132,7 @@ export function AdminPage() {
           {questionnaires.map(q => (
             <div key={q.id} className="list-item q-item">
               <div><strong>{q.title}</strong><div className="muted">{q.source_filename} · {q.stats.total_questions} questions · {new Date(q.created_at).toLocaleDateString()}</div></div>
-              <div className="row gap"><button className="btn secondary small" onClick={() => openResponses(q)}>Responses</button><Link className="btn small" to={`/q/${q.public_slug}`}>Open</Link><button className="btn danger small" onClick={() => removeQuestionnaire(q.public_slug)}>Delete</button></div>
+              <div className="row gap"><button className="btn secondary small" onClick={() => openResponses(q)}>Responses</button><Link className="btn secondary small" to={`/dashboard/${q.public_slug}`}>Dashboard</Link><Link className="btn small" to={`/q/${q.public_slug}`}>Open</Link><button className="btn danger small" onClick={() => removeQuestionnaire(q.public_slug)}>Delete</button></div>
             </div>
           ))}
           {!questionnaires.length && <div className="muted">No questionnaires uploaded yet.</div>}
