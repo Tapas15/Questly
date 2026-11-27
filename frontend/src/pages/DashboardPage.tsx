@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { api, getAdminToken, setAdminToken } from '../api/client';
 import type { Questionnaire, SavedResponse } from '../types';
 
+type ChartKind = 'bar' | 'donut' | 'line';
+
 function answerLabels(q: any, value: any): string[] {
   const opts = Object.fromEntries((q.options || []).map((o: any) => [o.value, o.label]));
   if (q.type === 'single') {
@@ -21,6 +23,87 @@ function answerLabels(q: any, value: any): string[] {
 }
 
 function pct(n: number, d: number) { return d ? Math.round((n / d) * 100) : 0; }
+const PALETTE = ['#4f46e5','#06b6d4','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b','#84cc16','#0ea5e9'];
+
+function DonutChart({ data }: { data: { label: string; value: number; color: string }[] }) {
+  const total = data.reduce((s, d) => s + d.value, 0) || 1;
+  let acc = 0;
+  const stops = data.map(d => { const start = acc; acc += (d.value / total) * 360; return `${d.color} ${start}deg ${acc}deg`; }).join(', ');
+  return (
+    <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ width: 180, height: 180, borderRadius: '50%', background: `conic-gradient(${stops})`, position: 'relative', flex: '0 0 auto' }}>
+        <div style={{ position: 'absolute', inset: 28, background: '#fff', borderRadius: '50%', display: 'grid', placeItems: 'center', textAlign: 'center' }}>
+          <div><div style={{ fontSize: 28, fontWeight: 700, color: '#1e293b' }}>{total === 1 && data.every(d=>d.value===0) ? 0 : data.reduce((s,d)=>s+d.value,0)}</div><div className="muted" style={{ fontSize: 12 }}>responses</div></div>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gap: 8, minWidth: 180 }}>
+        {data.map(d => (
+          <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+            <span style={{ width: 12, height: 12, borderRadius: 3, background: d.color, flex: '0 0 auto' }} />
+            <span style={{ flex: 1 }}>{d.label}</span>
+            <strong>{d.value}</strong>
+            <span className="muted">{pct(d.value, data.reduce((s,x)=>s+x.value,0))}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BarChart({ rows, max }: { rows: { label: string; value: number; color: string }[]; max?: number }) {
+  const m = max ?? Math.max(1, ...rows.map(r => r.value));
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      {rows.map(r => (
+        <div key={r.label}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4, gap: 12 }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span>
+            <span className="muted" style={{ flex: '0 0 auto' }}>{r.value}</span>
+          </div>
+          <div style={{ background: '#e2e8f0', borderRadius: 999, height: 12, overflow: 'hidden' }}>
+            <div style={{ width: `${(r.value / m) * 100}%`, background: r.color, height: '100%', borderRadius: 999, transition: 'width .4s ease' }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LineChart({ points, color = '#4f46e5' }: { points: { label: string; value: number }[]; color?: string }) {
+  if (!points.length) return <div className="muted">No time data yet.</div>;
+  const w = 700, h = 220, pad = 36;
+  const max = Math.max(1, ...points.map(p => p.value));
+  const xs = points.map((_, i) => pad + (i * (w - pad * 2)) / Math.max(1, points.length - 1));
+  const ys = points.map(p => h - pad - (p.value / max) * (h - pad * 2));
+  const path = xs.map((x, i) => `${i === 0 ? 'M' : 'L'} ${x} ${ys[i]}`).join(' ');
+  const area = `${path} L ${xs[xs.length - 1]} ${h - pad} L ${xs[0]} ${h - pad} Z`;
+  return (
+    <div style={{ width: '100%', overflowX: 'auto' }}>
+      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', maxWidth: w, height: 'auto', display: 'block' }}>
+        {[0,0.25,0.5,0.75,1].map(t => {
+          const y = h - pad - t * (h - pad * 2);
+          return <g key={t}><line x1={pad} y1={y} x2={w-pad} y2={y} stroke="#e2e8f0" /><text x={4} y={y+4} fontSize="10" fill="#94a3b8">{Math.round(max*t)}</text></g>;
+        })}
+        <path d={area} fill={color} opacity="0.12" />
+        <path d={path} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        {xs.map((x, i) => (
+          <g key={i}>
+            <circle cx={x} cy={ys[i]} r="4" fill="#fff" stroke={color} strokeWidth="2" />
+            {(i === 0 || i === points.length - 1 || points.length <= 8 || i % Math.ceil(points.length/6) === 0) && (
+              <text x={x} y={h - 10} fontSize="10" textAnchor="middle" fill="#64748b">{points[i].label}</text>
+            )}
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+function pickChart(qu: any): ChartKind {
+  const optCount = (qu.options || []).length;
+  if (qu.type === 'single' && optCount <= 6) return 'donut';
+  return 'bar';
+}
 
 export function DashboardPage() {
   const { slug = '' } = useParams();
@@ -57,6 +140,19 @@ export function DashboardPage() {
     return { total, auth, anon, latest };
   }, [responses]);
 
+  const overTime = useMemo(() => {
+    const byDay: Record<string, number> = {};
+    for (const r of responses) {
+      const d = new Date(r.submitted_at);
+      if (isNaN(d.getTime())) continue;
+      const key = d.toISOString().slice(0, 10);
+      byDay[key] = (byDay[key] || 0) + 1;
+    }
+    const keys = Object.keys(byDay).sort();
+    let cum = 0;
+    return keys.map(k => { cum += byDay[k]; return { label: k.slice(5), value: cum, daily: byDay[k] }; });
+  }, [responses]);
+
   const mcqAgg = useMemo(() => {
     return mcqQuestions.map(qu => {
       const counts: Record<string, number> = {};
@@ -70,9 +166,9 @@ export function DashboardPage() {
           : [typeof r.answers?.[qu.id] === 'object' && r.answers?.[qu.id] ? r.answers[qu.id].value : r.answers?.[qu.id]];
         for (const v of vals) if (v && counts[v] !== undefined) counts[v]++;
       }
-      const rows = (qu.options || []).map(o => ({ label: o.label, count: counts[o.value] || 0, p: pct(counts[o.value] || 0, Math.max(answered, 1)) }))
-        .sort((a, b) => b.count - a.count);
-      return { qu, answered, rows };
+      const rows = (qu.options || []).map((o, i) => ({ label: o.label, value: counts[o.value] || 0, color: PALETTE[i % PALETTE.length], p: pct(counts[o.value] || 0, Math.max(answered, 1)) }));
+      const sorted = [...rows].sort((a, b) => b.value - a.value);
+      return { qu, answered, rows, sorted, chart: pickChart(qu) };
     });
   }, [mcqQuestions, active]);
 
@@ -86,9 +182,9 @@ export function DashboardPage() {
     <div className="page admin-page">
       <div className="hero card admin-hero">
         <div>
-          <div className="hero-badge">Response Dashboard</div>
+          <div className="hero-badge">Response Analytics</div>
           <h1>{q ? q.title : 'Questionnaire Dashboard'}</h1>
-          <p className="muted hero-sub">Visual summary of collected responses. View aggregate insights or drill into an individual respondent.</p>
+          <p className="muted hero-sub">Auto-updating graph dashboard. Charts adapt as responses accumulate over time.</p>
         </div>
         <div className="row gap" style={{ flexWrap: 'wrap' }}>
           <Link className="btn secondary" to="/">Admin</Link>
@@ -114,6 +210,21 @@ export function DashboardPage() {
             <div className="stat"><div className="stat-num" style={{ fontSize: 16 }}>{summary.latest}</div><div className="muted">Latest submission</div></div>
           </div>
 
+          <div className="grid two" style={{ marginBottom: 16 }}>
+            <div className="card">
+              <div className="section-kicker">Over Time</div>
+              <h2>Responses accumulated</h2>
+              <p className="muted" style={{ marginTop: -4, marginBottom: 12, fontSize: 13 }}>Cumulative responses by day. This graph grows automatically as new data arrives.</p>
+              {responses.length ? <LineChart points={overTime} /> : <div className="muted">No responses yet.</div>}
+            </div>
+            <div className="card">
+              <div className="section-kicker">Respondent Mix</div>
+              <h2>Identity breakdown</h2>
+              <p className="muted" style={{ marginTop: -4, marginBottom: 12, fontSize: 13 }}>Google verified vs anonymous submissions.</p>
+              <DonutChart data={[{ label: 'Google verified', value: summary.auth, color: '#4f46e5' }, { label: 'Anonymous', value: summary.anon, color: '#06b6d4' }]} />
+            </div>
+          </div>
+
           <div className="card">
             <div className="section-kicker">View</div>
             <h2>Individual or aggregate</h2>
@@ -127,24 +238,25 @@ export function DashboardPage() {
           </div>
 
           <div className="card">
-            <div className="section-kicker">MCQ Insights</div>
-            <h2>Choice question distribution</h2>
-            <div className="mcq-list">
-              {mcqAgg.map(({ qu, answered, rows }) => (
+            <div className="section-kicker">MCQ Graphs</div>
+            <h2>Choice question analytics</h2>
+            <p className="muted" style={{ marginTop: -4, marginBottom: 16, fontSize: 13 }}>Chart type is selected automatically: donut for small single-choice, horizontal bars for multi-choice/long option sets.</p>
+            <div style={{ display: 'grid', gap: 16 }}>
+              {mcqAgg.map(({ qu, answered, rows, sorted, chart }) => (
                 <div key={qu.id} className="mcq-item">
-                  <div className="q-num">Q{qu.number} · {answered}/{active.length} answered</div>
-                  <div className="q-text">{qu.text}</div>
-                  <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
-                    {rows.map(row => (
-                      <div key={row.label}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                          <span>{row.label}</span><span className="muted">{row.count} ({row.p}%)</span>
-                        </div>
-                        <div style={{ background: '#e2e8f0', borderRadius: 999, height: 10, overflow: 'hidden' }}>
-                          <div style={{ width: `${row.p}%`, background: 'linear-gradient(90deg,#4f46e5,#06b6d4)', height: '100%', borderRadius: 999 }} />
-                        </div>
-                      </div>
-                    ))}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                    <div>
+                      <div className="q-num">Q{qu.number} · {chart === 'donut' ? 'Donut' : 'Bar'} chart · {answered}/{active.length} answered</div>
+                      <div className="q-text">{qu.text}</div>
+                    </div>
+                    <span className="badge">{qu.type === 'multi' ? 'Multi-select' : 'Single-select'}</span>
+                  </div>
+                  <div style={{ marginTop: 14 }}>
+                    {chart === 'donut' ? (
+                      <DonutChart data={rows.map(r => ({ label: r.label, value: r.value, color: r.color }))} />
+                    ) : (
+                      <BarChart rows={sorted.map(r => ({ label: `${r.label} (${r.p}%)`, value: r.value, color: r.color }))} />
+                    )}
                   </div>
                 </div>
               ))}
