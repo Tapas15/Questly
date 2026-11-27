@@ -267,31 +267,48 @@ def submit(slug: str, req: SubmitRequest, request: Request, db: Session = Depend
         raise HTTPException(status_code=401, detail=f"Please sign in with {settings.auth_required_provider.title()} to submit your response.")
     respondent = req.respondent
     identity = {"mode": "anonymous", "label": "Anonymous"}
+    respondent_key = ""
     if user:
+        respondent_key = f"auth:{user.id}"
         identity = {"mode": "authenticated", "provider": user.provider, "email": user.email, "name": user.name, "user_id": user.id, "label": user.email or user.name or "Authenticated user"}
         respondent = {**req.respondent, "_auth": identity}
     else:
         anon_id = request.cookies.get("anon_id") or secrets.token_hex(8)
+        respondent_key = f"anon:{anon_id}"
         display = str(req.respondent.get("_display_name") or "").strip()
         firm = str(req.respondent.get("_firm_name") or "").strip()
         label = display or firm or f"Anonymous ({anon_id[:8]})"
         identity = {"mode": "anonymous", "anon_id": anon_id, "label": label, "display_name": display, "firm_name": firm}
         respondent = {**req.respondent, "_anon": identity}
-    resp = ResponseModel(
-        questionnaire_id=q.id,
-        respondent_json=json.dumps(respondent, ensure_ascii=False),
-        answers_json=json.dumps({
-            "answers": req.answers,
-            "accepted_ai": req.accepted_ai,
-        }, ensure_ascii=False),
-        ai_instruction=req.ai_instruction,
-        status="submitted",
-        submitted_at=datetime.now(timezone.utc),
-    )
-    db.add(resp)
-    db.commit()
-    db.refresh(resp)
-    result = {"response_id": resp.id, "status": resp.status, "submitted_at": resp.submitted_at.isoformat() if resp.submitted_at else None}
+
+    payload_json = json.dumps({"answers": req.answers, "accepted_ai": req.accepted_ai}, ensure_ascii=False)
+    respondent_json = json.dumps(respondent, ensure_ascii=False)
+    existing = None
+    if respondent_key:
+        existing = db.scalar(select(ResponseModel).where(ResponseModel.questionnaire_id == q.id, ResponseModel.respondent_key == respondent_key).order_by(ResponseModel.submitted_at.desc()))
+    if existing:
+        existing.respondent_json = respondent_json
+        existing.answers_json = payload_json
+        existing.ai_instruction = req.ai_instruction or ""
+        existing.status = "submitted"
+        existing.submitted_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(existing)
+        resp = existing
+    else:
+        resp = ResponseModel(
+            questionnaire_id=q.id,
+            respondent_key=respondent_key,
+            respondent_json=respondent_json,
+            answers_json=payload_json,
+            ai_instruction=req.ai_instruction or "",
+            status="submitted",
+            submitted_at=datetime.now(timezone.utc),
+        )
+        db.add(resp)
+        db.commit()
+        db.refresh(resp)
+    result = {"response_id": resp.id, "status": resp.status, "submitted_at": resp.submitted_at.isoformat() if resp.submitted_at else None, "updated": bool(existing)}
     from fastapi.responses import JSONResponse
     jr = JSONResponse(result)
     if not user:
@@ -299,7 +316,26 @@ def submit(slug: str, req: SubmitRequest, request: Request, db: Session = Depend
     return jr
 
 
-@router.get("/questionnaires/{slug}/responses")
+@router.get("/questionnaires/{slug}/my-response")
+def my_response(slug: str, request: Request, db: Session = Depends(get_db)):
+    q = db.scalar(select(Questionnaire).where(Questionnaire.public_slug == slug))
+    if not q:
+        raise HTTPException(status_code=404, detail="Questionnaire not found")
+    user = _get_session_user(request, db)
+    keys = []
+    if user:
+        keys.append(f"auth:{user.id}")
+    anon_id = request.cookies.get("anon_id")
+    if anon_id:
+        keys.append(f"anon:{anon_id}")
+    if not keys:
+        return {"response": None}
+    resp = db.scalar(select(ResponseModel).where(ResponseModel.questionnaire_id == q.id, ResponseModel.respondent_key.in_(keys)).order_by(ResponseModel.submitted_at.desc()))
+    if not resp:
+        return {"response": None}
+    payload = json.loads(resp.answers_json)
+    respondent = json.loads(resp.respondent_json)
+    return {"response": {"id": resp.id, "submitted_at": resp.submitted_at, "respondent": respondent, "answers": payload.get("answers", {}), "accepted_ai": payload.get("accepted_ai", {}), "ai_instruction": resp.ai_instruction, "status": resp.status}}
 def list_responses(slug: str, db: Session = Depends(get_db), x_admin_token: str | None = Header(default=None)):
     _require_admin(x_admin_token)
     q = db.scalar(select(Questionnaire).where(Questionnaire.public_slug == slug))

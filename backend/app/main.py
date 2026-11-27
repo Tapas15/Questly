@@ -47,6 +47,9 @@ def on_startup() -> None:
         for row in rows:
             if not row.share_token:
                 conn.execute(text("UPDATE questionnaires SET share_token=:t WHERE id=:id"), {"t": secrets.token_urlsafe(16), "id": row.id})
+        resp_cols = [c["name"] for c in inspect(conn).get_columns("responses")]
+        if "respondent_key" not in resp_cols:
+            conn.execute(text("ALTER TABLE responses ADD COLUMN respondent_key VARCHAR(128) DEFAULT ''"))
 
 
 @app.get("/api/health")

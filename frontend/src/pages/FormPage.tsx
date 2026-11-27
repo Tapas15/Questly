@@ -26,22 +26,31 @@ export function FormPage() {
 
   useEffect(() => { (async () => {
     try {
-      const [data, prov, me, sample] = await Promise.all([
+      const [data, prov, me, sample, mine] = await Promise.all([
         api.getQuestionnaire(slug),
         api.getAuthProviders().catch(() => ({ providers: [], auth_required_for_submit: false })),
         api.getMe().catch(() => ({ user: null })),
         api.getQuestionnaireSample(slug).catch(() => ({ sample_prefill: null, profiles: [] })),
+        api.getMyResponse(slug).catch(() => ({ response: null })),
       ]);
       setQ(data);
       const required = authMode === 'required' ? !!prov.auth_required_for_submit : false;
       setAuth({ providers: prov.providers || [], required, user: me.user || null });
       setSampleProfiles(sample.profiles || []);
-      const prefill = (data as any).sample_prefill;
-      if (prefill?.answers) {
-        setAnswers(prefill.answers);
-        setOriginalAnswers(prefill.answers);
-        setInstruction(prefill.instruction || '');
-        setRespondent(prefill.respondent || {});
+      if (mine.response) {
+        setAnswers(mine.response.answers || {});
+        setOriginalAnswers(mine.response.answers || {});
+        setRespondent(mine.response.respondent || {});
+        setInstruction(mine.response.ai_instruction || '');
+        setAcceptedAI(mine.response.accepted_ai || {});
+      } else {
+        const prefill = (data as any).sample_prefill;
+        if (prefill?.answers) {
+          setAnswers(prefill.answers);
+          setOriginalAnswers(prefill.answers);
+          setInstruction(prefill.instruction || '');
+          setRespondent(prefill.respondent || {});
+        }
       }
     }
     catch (e: any) { setError(e.message); }
@@ -142,7 +151,7 @@ export function FormPage() {
   if (loading) return <div className="page"><div className="card">Loading questionnaire...</div></div>;
   if (error && !q) return <div className="page"><div className="card error">{error}</div></div>;
   if (!q) return null;
-  if (submitState === 'done') return <div className="page"><div className="card success"><h1>Response submitted</h1><p>Thank you. Your response has been recorded.</p></div></div>;
+  if (submitState === 'done') return       <div className="page"><div className="card success"><h1>Response submitted</h1><p>Thank you. Your response has been saved. You can reopen the same link to review or update it later.</p></div></div>;
 
   const sections = q.questions.reduce<Record<string, typeof q.questions>>((acc, qu) => { (acc[qu.section] ||= []).push(qu); return acc; }, {});
 

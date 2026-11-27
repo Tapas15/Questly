@@ -35,6 +35,7 @@ class Response(Base):
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
     questionnaire_id: Mapped[str] = mapped_column(ForeignKey("questionnaires.id", ondelete="CASCADE"), index=True)
+    respondent_key: Mapped[str] = mapped_column(String(128), index=True, default="")  # auth:user_id or anon:anon_id
     respondent_json: Mapped[str] = mapped_column(Text, default="{}")
     answers_json: Mapped[str] = mapped_column(Text, default="{}")
     ai_instruction: Mapped[str] = mapped_column(Text, default="")
