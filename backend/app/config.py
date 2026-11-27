@@ -27,5 +27,9 @@ class Settings(BaseSettings):
     auth_required_for_submit: bool = False
     auth_required_provider: str = "google"  # google | microsoft | any
 
+    response_webhook_url: str = ""
+    response_webhook_secret: str = ""
+    response_webhook_enabled: bool = True
+
 
 settings = Settings()

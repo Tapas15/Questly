@@ -115,6 +115,9 @@ Logs: `.run/backend.log`, `.run/frontend.log`
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | empty | Google OAuth credentials. |
 | `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` | empty | Microsoft OAuth credentials. |
 | `MICROSOFT_TENANT` | `common` | Microsoft tenant. |
+| `RESPONSE_WEBHOOK_URL` | empty | Google Apps Script Web app URL (`https://script.google.com/macros/s/.../exec`) that receives submit payloads. |
+| `RESPONSE_WEBHOOK_SECRET` | empty | Optional shared secret sent as `X-Webhook-Secret`; must match script `SHARED_SECRET`. |
+| `RESPONSE_WEBHOOK_ENABLED` | `true` | Enable webhook delivery when URL is set. |
 
 ## Google Sign-In Setup (public authenticated link)
 
@@ -136,6 +139,118 @@ Logs: `.run/backend.log`, `.run/frontend.log`
 4. Share Admin’s **Authenticated link**. Respondents sign in with Google before submit; identity is attached to response.
 
 > Cloudflare quick tunnels change URL on restart. Update `PUBLIC_BASE_URL`, `FRONTEND_ORIGIN`, and Google redirect URI when URL changes. Use a named tunnel/custom domain for stable public sharing.
+
+## Google Sheets / Structured Export (No Google OAuth in App)
+
+For a simple “no-auth in app” flow, use a Google Apps Script web app as a webhook. Questly POSTs a structured JSON payload on every submit; the script appends a row to Google Sheets.
+
+### Where to get `RESPONSE_WEBHOOK_URL`
+
+`RESPONSE_WEBHOOK_URL` is the **Google Apps Script Web app URL** (looks like `https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec`). You get it after deploying the script:
+
+1. Open your Google Sheet → **Extensions** → **Apps Script**.
+2. Paste the script below and set `SHARED_SECRET`.
+3. Click **Deploy** → **New deployment**.
+4. Click gear icon → select **Web app**.
+5. Set **Execute as** = `Me`.
+6. Set **Who has access** = `Anyone` (for public form submissions). If your users are all in your Workspace and you prefer restricted access, choose the Workspace option, but test webhook delivery.
+7. Click **Deploy**, authorize access, then copy the **Web app URL**. This copied URL is your `RESPONSE_WEBHOOK_URL`.
+
+> If you edit the script later, use **Deploy** → **Manage deployments** → edit → **New version** → Deploy. The URL usually stays the same for that deployment; copy it again to be safe.
+
+### 1) Create Google Sheet + Apps Script
+
+1. Create a Google Sheet (e.g. `Questly Responses`).
+2. Extensions → **Apps Script**.
+3. Replace `Code.gs` with:
+
+```javascript
+const SHEET_NAME = 'Responses';
+const SHARED_SECRET = 'J6F7Jslm0Mi2GYLfh-dA4O7B238v-12AJSTjDBVZYbI'; // must match RESPONSE_WEBHOOK_SECRET
+
+function doPost(e) {
+  try {
+    const secret = (e.parameter.secret || e.postData.headers['X-Webhook-Secret'] || e.postData.headers['x-webhook-secret'] || '').toString();
+    if (SHARED_SECRET && secret !== SHARED_SECRET) {
+      return json({ ok: false, error: 'unauthorized' }, 401);
+    }
+    const payload = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
+
+    const baseHeaders = ['submitted_at','response_id','status','updated','identity','name','email','firm','city','role','contact','ai_instruction'];
+    const qHeaders = (payload.questions || []).map(q => `Q${q.number}: ${q.text}`.slice(0, 150));
+    const headers = baseHeaders.concat(qHeaders);
+    ensureHeaders(sheet, headers);
+
+    const r = payload.respondent || {};
+    const row = [
+      payload.submitted_at || '',
+      payload.response_id || '',
+      payload.status || '',
+      payload.updated ? 'yes' : 'no',
+      r.identity || '',
+      r.name || '',
+      r.email || '',
+      r.firm || '',
+      r.city || '',
+      r.role || '',
+      r.contact || '',
+      payload.ai_instruction || ''
+    ];
+    (payload.questions || []).forEach(q => row.push(q.answer || ''));
+    sheet.appendRow(row);
+    return json({ ok: true });
+  } catch (err) {
+    return json({ ok: false, error: String(err) }, 500);
+  }
+}
+
+function ensureHeaders(sheet, headers) {
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(headers);
+    sheet.setFrozenRows(1);
+    return;
+  }
+  const current = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (current.length < headers.length) {
+    sheet.getRange(1, current.length + 1, 1, headers.length - current.length).setValues([headers.slice(current.length)]);
+  }
+}
+
+function json(obj, code) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+```
+
+4. Deploy → **New deployment** → type **Web app**.
+   - Execute as: **Me**
+   - Who has access: **Anyone** (or Anyone with Google account if internal; “Anyone” is easiest for webhook)
+5. Copy the **Web app URL** — this is the value for `RESPONSE_WEBHOOK_URL`. It should end with `/exec`.
+
+### 2) Configure Questly
+
+Add to `.env`:
+
+```env
+RESPONSE_WEBHOOK_URL=https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec  # copied from Apps Script Deploy > Web app
+RESPONSE_WEBHOOK_SECRET=J6F7Jslm0Mi2GYLfh-dA4O7B238v-12AJSTjDBVZYbI  # same value as SHARED_SECRET in script
+RESPONSE_WEBHOOK_ENABLED=true
+```
+
+Redeploy/restart backend (`docker compose up --build -d`).
+
+### 3) Payload shape
+
+Questly sends structured JSON:
+
+- `respondent`: identity, name, email, firm, city, role, contact
+- `questions[]`: `number`, `text`, `type`, `section`, `answer` (human-readable)
+- `answers_flat`: `Q1..Qn` keys for easy automation
+- `raw_answers`: original answer values
+
+This gives both a readable Sheets row and machine-friendly fields.
 
 ## Usage
 

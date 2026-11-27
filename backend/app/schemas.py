@@ -83,4 +83,6 @@ class SubmitRequest(BaseModel):
 class SubmitResponse(BaseModel):
     response_id: str
     status: str
-    submitted_at: datetime
+    submitted_at: datetime | None
+    updated: bool = False
+    webhook: dict[str, Any] | None = None

@@ -19,6 +19,7 @@ from ..services.autofill import suggest_answers
 from ..services.export import to_csv, to_xlsx
 from ..services.llm import LLMError
 from ..services.parser import parse_questionnaire
+from ..services.webhook import build_response_payload, send_response_webhook
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -309,6 +310,23 @@ def submit(slug: str, req: SubmitRequest, request: Request, db: Session = Depend
         db.commit()
         db.refresh(resp)
     result = {"response_id": resp.id, "status": resp.status, "submitted_at": resp.submitted_at.isoformat() if resp.submitted_at else None, "updated": bool(existing)}
+    webhook_result = {"sent": False, "reason": "not_attempted"}
+    try:
+        schema = json.loads(q.schema_json)
+        response_payload = {
+            "id": resp.id,
+            "submitted_at": resp.submitted_at.isoformat() if resp.submitted_at else None,
+            "status": resp.status,
+            "updated": bool(existing),
+            "respondent": respondent,
+            "answers": req.answers,
+            "ai_instruction": req.ai_instruction or "",
+        }
+        questionnaire_payload = {"id": q.id, "title": q.title, "public_slug": q.public_slug, "questions": schema.get("questions", [])}
+        webhook_result = send_response_webhook(build_response_payload(questionnaire=questionnaire_payload, response=response_payload))
+    except Exception:
+        webhook_result = {"sent": False, "reason": "build_or_send_error"}
+    result["webhook"] = webhook_result
     from fastapi.responses import JSONResponse
     jr = JSONResponse(result)
     if not user:
