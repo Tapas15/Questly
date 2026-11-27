@@ -16,7 +16,7 @@ async function request<T>(path: string, init: RequestInit = {}, admin = false): 
     const token = getAdminToken();
     if (token) headers.set('X-Admin-Token', token);
   }
-  const res = await fetch(path, { ...init, headers });
+  const res = await fetch(path, { ...init, headers, credentials: 'include' });
   if (!res.ok) {
     let detail = res.statusText;
     try { const data = await res.json(); detail = data.detail || JSON.stringify(data); } catch {}
@@ -34,6 +34,9 @@ export const api = {
     const data = await request<{ questionnaire: Questionnaire }>('/api/questionnaires/upload', { method: 'POST', body: fd }, true);
     return data.questionnaire;
   },
+  getAuthProviders: () => request<{ providers: { id: string; label: string }[]; auth_required_for_submit: boolean }>('/api/auth/providers'),
+  getMe: () => request<{ user: { id: string; provider: string; email: string; name: string; picture: string } | null }>('/api/auth/me'),
+  logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
   getQuestionnaire: async (slug: string): Promise<Questionnaire & { sample_prefill?: any }> => {
     const data = await request<{ questionnaire: Questionnaire & { sample_prefill?: any } }>(`/api/questionnaires/${slug}`);
     return data.questionnaire;

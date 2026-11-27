@@ -6,14 +6,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
 from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..models import Questionnaire, Response as ResponseModel
+from ..models import Questionnaire, Response as ResponseModel, User
 from ..schemas import SuggestAllRequest, SuggestQuestionRequest, SuggestResponse, SubmitRequest, SubmitResponse, UploadResponse
 from ..services.autofill import suggest_answers
 from ..services.export import to_csv, to_xlsx
@@ -47,6 +47,13 @@ def _q_out(q: Questionnaire) -> dict[str, Any]:
         "questions": schema.get("questions", []),
         "stats": schema.get("stats", {}),
     }
+
+
+def _get_session_user(request: Request, db: Session) -> User | None:
+    uid = request.session.get("user_id")
+    if not uid:
+        return None
+    return db.get(User, uid)
 
 
 @router.post("/questionnaires/upload", response_model=UploadResponse)
@@ -238,13 +245,19 @@ async def suggest_question(slug: str, req: SuggestQuestionRequest, db: Session =
 
 
 @router.post("/questionnaires/{slug}/submit", response_model=SubmitResponse)
-def submit(slug: str, req: SubmitRequest, db: Session = Depends(get_db)):
+def submit(slug: str, req: SubmitRequest, request: Request, db: Session = Depends(get_db)):
     q = db.scalar(select(Questionnaire).where(Questionnaire.public_slug == slug))
     if not q:
         raise HTTPException(status_code=404, detail="Questionnaire not found")
+    user = _get_session_user(request, db)
+    if settings.auth_required_for_submit and not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    respondent = req.respondent
+    if user:
+        respondent = {**req.respondent, "_auth": {"provider": user.provider, "email": user.email, "name": user.name, "user_id": user.id}}
     resp = ResponseModel(
         questionnaire_id=q.id,
-        respondent_json=json.dumps(req.respondent, ensure_ascii=False),
+        respondent_json=json.dumps(respondent, ensure_ascii=False),
         answers_json=json.dumps({
             "answers": req.answers,
             "accepted_ai": req.accepted_ai,

@@ -14,7 +14,8 @@ Simple, responsive app for uploading a Word questionnaire, extracting questions,
 
 - Upload `.docx` questionnaire and extract questions/options/descriptive fields
 - Verified against included `CA_Accounting_Firm_Problem_Validation_Questionnaire.docx` (42 questions: 35 choice, 7 descriptive)
-- **Auto sample prefill** on every upload/open: server generates questionnaire-based sample answers covering all MCQ + descriptive questions; users can edit/select as needed
+- **SSO login (Google/Microsoft)**: optional OAuth sign-in on public form; signed-in identity attached to submitted response. Configure `GOOGLE_*` / `MICROSOFT_*` env vars; set `AUTH_REQUIRED_FOR_SUBMIT=true` to require sign-in.
+- **Dynamic sample prefill**: each load/regenerate creates a different questionnaire-based sample draft covering all 42 questions; “Fill example from my input” adapts sample choices/text to the instruction box. Users can edit/select before submit.
 - Public respondent form URL: `/q/{slug}`
 - Firm/respondent detail fields (optional, at end of form)
 - MCQ radio/checkbox rendering, `Other` text inputs, max-selection limits
@@ -117,7 +118,11 @@ For external access, use a tunnel/reverse proxy and set `PUBLIC_BASE_URL` and `F
 | `OLLAMA_MODEL` | `llama3.1` | Ollama model |
 | `LLM_API_KEY` | empty | OpenAI-compatible/Kilo API key |
 | `LLM_BASE_URL` | empty | e.g. `https://api.kilo.ai/api/gateway` |
-| `LLM_MODEL` | `gpt-4o-mini` | Model id for compatible provider |
+| `SESSION_SECRET` | `change-this-session-secret` | Session cookie signing secret; set a strong random value in prod |
+| `AUTH_REQUIRED_FOR_SUBMIT` | `false` | When `true`, respondent must sign in before submit |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | empty | Enable Google SSO |
+| `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` | empty | Enable Microsoft SSO |
+| `MICROSOFT_TENANT` | `common` | Microsoft tenant (`common`, `organizations`, or tenant id) |
 
 ## AI safety behavior
 

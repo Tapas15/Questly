@@ -42,3 +42,16 @@ class Response(Base):
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     questionnaire: Mapped[Questionnaire] = relationship(back_populates="responses")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    provider: Mapped[str] = mapped_column(String(32), index=True)
+    provider_sub: Mapped[str] = mapped_column(String(255), index=True)
+    email: Mapped[str] = mapped_column(String(255), index=True, default="")
+    name: Mapped[str] = mapped_column(String(255), default="")
+    picture: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_login_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

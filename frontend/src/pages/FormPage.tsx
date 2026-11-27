@@ -18,11 +18,13 @@ export function FormPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [qAiLoading, setQAiLoading] = useState<string | null>(null);
   const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'done'>('idle');
+  const [auth, setAuth] = useState<{ providers: { id: string; label: string }[]; user: any | null; required: boolean }>({ providers: [], user: null, required: false });
 
   useEffect(() => { (async () => {
     try {
-      const data = await api.getQuestionnaire(slug);
+      const [data, prov, me] = await Promise.all([api.getQuestionnaire(slug), api.getAuthProviders().catch(() => ({ providers: [], auth_required_for_submit: false })), api.getMe().catch(() => ({ user: null }))]);
       setQ(data);
+      setAuth({ providers: prov.providers || [], required: !!prov.auth_required_for_submit, user: me.user || null });
       const prefill = (data as any).sample_prefill;
       if (prefill?.answers) {
         setAnswers(prefill.answers);
@@ -35,6 +37,27 @@ export function FormPage() {
     finally { setLoading(false); }
   })(); }, [slug]);
 
+  const fillFromInput = () => {
+    if (!q) return;
+    const text = instruction.toLowerCase();
+    const next: Record<string, any> = { ...answers };
+    for (const qu of q.questions) {
+      if (qu.type === 'single') {
+        const match = qu.options.find(o => text.includes(o.label.toLowerCase().slice(0, Math.min(12, o.label.length))));
+        if (match) next[qu.id] = match.value;
+      } else if (qu.type === 'multi') {
+        const matches = qu.options.filter(o => text.includes(o.label.toLowerCase().split(/[\s/]+/)[0])).map(o => o.value);
+        if (matches.length) next[qu.id] = matches.slice(0, qu.max_selections || matches.length);
+      } else {
+        const qt = qu.text.replace(/^\d+\.\s*/, '').replace(/\?$/, '').trim();
+        next[qu.id] = instruction.trim() ? `Based on your input: ${instruction.trim().slice(0, 220)}. Regarding "${qt}", we would tailor our response to this context.` : next[qu.id];
+      }
+    }
+    setAnswers(next);
+    setOriginalAnswers(next);
+    setSuggestions({});
+    setAcceptedAI({});
+  };
   const loadSample = async () => {
     if (!q) return;
     try {
@@ -118,14 +141,29 @@ export function FormPage() {
       </div>
 
       <div className="card ai-card">
-        <div className="section-kicker">AI Autofill</div>
-        <h2>Tell AI what you want to fill in this questionnaire</h2>
-        <p className="muted">A fresh sample draft is auto-filled from this questionnaire. Each time you load/regenerate, sample choices and text vary. Edit any answer to match your firm's real details.</p>
-        <textarea className="input textarea" value={instruction} onChange={e => setInstruction(e.target.value)} placeholder="Example: I run a CA firm providing GST, income tax, accounting and auditing services. We use Tally and Excel. Our biggest challenge is manual reconciliation." />
+        <div className="section-kicker">Identity & AI Autofill</div>
+        <h2>Sign in and generate sample answers</h2>
+        <p className="muted">Sign in with Google or Microsoft to identify your response. A fresh sample draft is auto-filled from this questionnaire; each regenerate gives different example selections/text. Edit anything to match your real details.</p>
+        <div className="row gap mt" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+          {auth.user ? (
+            <>
+              <span className="answer-chip">Signed in: {auth.user.email || auth.user.name} ({auth.user.provider})</span>
+              <button className="btn secondary" onClick={async () => { await api.logout(); setAuth(a => ({ ...a, user: null })); }}>Sign out</button>
+            </>
+          ) : (
+            <>
+              {auth.providers.length ? auth.providers.map(p => (
+                <a key={p.id} className="btn secondary" href={`/api/auth/login/${p.id}?next=${encodeURIComponent(`/q/${slug}`)}`}>Continue with {p.label}</a>
+              )) : <span className="muted">SSO not configured. Set Google/Microsoft OAuth env vars in backend.</span>}
+            </>
+          )}
+        </div>
+        <textarea className="input textarea mt" value={instruction} onChange={e => setInstruction(e.target.value)} placeholder="Describe your firm/context. Example: I run a CA firm providing GST, income tax, accounting and auditing services. We use Tally and Excel. Our biggest challenge is manual reconciliation." />
         <div className="row gap mt">
-          <button className="btn" onClick={generateAll} disabled={aiLoading || !instruction.trim()}>{aiLoading ? 'Generating suggestions...' : 'Generate suggestions'}</button>
+          <button className="btn" onClick={generateAll} disabled={aiLoading || !instruction.trim()}>{aiLoading ? 'Generating suggestions...' : 'Generate suggestions from my input'}</button>
+          <button className="btn secondary" onClick={fillFromInput} disabled={aiLoading || !instruction.trim()}>Fill example from my input</button>
           <button className="btn secondary" onClick={loadSample} disabled={aiLoading}>Generate new sample draft</button>
-          <span className="muted">Review, modify, accept/reject, then submit.</span>
+          <span className="muted">Samples are examples only; review and modify before submitting.</span>
         </div>
         {error && <div className="error mt">{error}</div>}
       </div>
@@ -167,9 +205,9 @@ export function FormPage() {
       <div className="card submit-bar">
         <div>
           <div className="submit-title">Ready to submit?</div>
-          <div className="muted">Review your answers. AI suggestions are only included if you accepted or edited them.</div>
+          <div className="muted">{auth.required && !auth.user ? 'Sign in with Google/Microsoft before submitting.' : 'Review your answers. AI suggestions are only included if you accepted or edited them.'}</div>
         </div>
-        <button className="btn submit-btn" onClick={submit} disabled={submitState === 'submitting'}>{submitState === 'submitting' ? 'Submitting...' : 'Submit response'}</button>
+        <button className="btn submit-btn" onClick={submit} disabled={submitState === 'submitting' || (auth.required && !auth.user)}>{submitState === 'submitting' ? 'Submitting...' : 'Submit response'}</button>
       </div>
     </div>
   );

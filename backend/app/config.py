@@ -18,5 +18,13 @@ class Settings(BaseSettings):
 
     public_base_url: str = "http://localhost:5173"
 
+    session_secret: str = "change-this-session-secret"
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    microsoft_client_id: str = ""
+    microsoft_client_secret: str = ""
+    microsoft_tenant: str = "common"
+    auth_required_for_submit: bool = False
+
 
 settings = Settings()
