@@ -52,14 +52,24 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
-Check status / print URLs:
+Check status / print URLs / `starting.log`:
 ```bash
+docker compose up -d
 docker compose ps
-curl http://localhost:8080/api/health   # {"ok":true}
-docker compose logs --tail=40 backend   # startup logs include Admin + Google OAuth redirect URL
-docker compose run --rm urls            # writes starting.log (Admin + Google OAuth redirect + Cloudflare placeholder)
-powershell -ExecutionPolicy Bypass -File scripts/update-starting-log.ps1  # refresh starting.log with current cloudflared URL
-Get-Content starting.log
+docker compose run --rm urls   # writes starting.log with local + cloudflare URLs
+type starting.log              # Windows (PowerShell: Get-Content starting.log)
+```
+
+`starting.log` contains:
+- `Admin Dashboard (Local)`
+- `Admin Dashboard (Cloudflare)`
+- `Google OAuth Redirect URL (Local)`
+- `Google OAuth Redirect URL (Cloudflare)`
+- `Cloudflare URL`
+
+If cloudflared is running and writing `cloudflared.err.log` in project root, `docker compose run --rm urls` auto-detects the latest tunnel URL. You can also run:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/update-starting-log.ps1
 ```
 
 Open:
@@ -128,17 +138,25 @@ tail -f .run/backend.log
 
 ### URLs / `starting.log`
 
-`./start-termux.sh` prints URLs and writes `starting.log` with:
-- `Admin Dashboard`
-- `Google OAuth Redirect URL`
-- `Cloudflare URL` (or `(not started)` if cloudflared not detected)
+Run:
+```bash
+./start-termux.sh
+cat starting.log
+```
+
+`starting.log` contains:
+- `Admin Dashboard (Local)`
+- `Admin Dashboard (Cloudflare)`
+- `Google OAuth Redirect URL (Local)`
+- `Google OAuth Redirect URL (Cloudflare)`
+- `Cloudflare URL`
 
 Install cloudflared on Termux if needed:
 ```bash
 pkg install cloudflared -y
 ```
 
-> Quick tunnel URL changes every restart. The app accepts the new URL automatically (no `.env` change needed). For Google sign-in, add the redirect URI from `starting.log` in Google Cloud Console.
+> Quick tunnel URL changes every restart. The app accepts the new URL automatically (no `.env` change needed). For Google sign-in, add `Google OAuth Redirect URL (Cloudflare)` from `starting.log` in Google Cloud Console.
 > Data persists in `backend/data` and `backend/uploads`.
 
 Logs: `.run/backend.log`, `.run/frontend.log`, `.run/cloudflared.log`, `starting.log`

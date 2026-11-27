@@ -46,20 +46,35 @@ services:
       - backend
       - frontend
     environment:
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-}
+      LOCAL_BASE: ${LOCAL_BASE:-http://localhost:8080}
+      CLOUDFLARED_LOG: ${CLOUDFLARED_LOG:-/out/cloudflared.err.log}
     volumes:
       - ./:/out
     command:
       - sh
       - -c
       - |
-        BASE="$${PUBLIC_BASE_URL:-$${FRONTEND_ORIGIN:-http://localhost:8080}}"
+        BASE="$${LOCAL_BASE:-http://localhost:8080}"
         BASE="$${BASE%/}"
+        CF_LOG="$${CLOUDFLARED_LOG:-/out/cloudflared.err.log}"
+        CF=""
+        if [ -f "$$CF_LOG" ]; then
+          CF=$$(grep -oE 'https://[-a-z0-9]+\.trycloudflare\.com' "$$CF_LOG" | tail -n1 || true)
+        fi
+        if [ -n "$$CF" ]; then
+          CF_ADMIN="$$CF/"
+          CF_REDIRECT="$$CF/api/auth/callback/google"
+        else
+          CF="(not detected)"
+          CF_ADMIN="(not detected)"
+          CF_REDIRECT="(not detected - add after tunnel starts)"
+        fi
         cat > /out/starting.log <<EOF
-        Admin Dashboard: $$BASE/
-        Google OAuth Redirect URL: $$BASE/api/auth/callback/google
-        Cloudflare URL: (run cloudflared tunnel --url http://localhost:8080 to detect)
+        Admin Dashboard (Local): $$BASE/
+        Admin Dashboard (Cloudflare): $$CF_ADMIN
+        Google OAuth Redirect URL (Local): $$BASE/api/auth/callback/google
+        Google OAuth Redirect URL (Cloudflare): $$CF_REDIRECT
+        Cloudflare URL: $$CF
         EOF
         echo "Wrote starting.log"
         cat /out/starting.log

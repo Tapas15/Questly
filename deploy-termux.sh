@@ -117,9 +117,11 @@ else
 fi
 echo "============================================"
 cat > starting.log <<LOG
-Admin Dashboard: $BASE_LOCAL/
-Google OAuth Redirect URL: $BASE_LOCAL/api/auth/callback/google
-Cloudflare URL: (not started)
+Admin Dashboard (Local): $BASE_LOCAL/
+Admin Dashboard (Cloudflare): (not detected)
+Google OAuth Redirect URL (Local): $BASE_LOCAL/api/auth/callback/google
+Google OAuth Redirect URL (Cloudflare): (not detected - add after tunnel starts)
+Cloudflare URL: (not detected)
 LOG
 
 if [ -n "$BASE_NET" ]; then
@@ -161,8 +163,10 @@ if command -v cloudflared >/dev/null 2>&1; then
       echo "Add this in Google Cloud Console > OAuth client > Authorized redirect URIs:"
       echo "  $TURL/api/auth/callback/google"
       cat > starting.log <<LOG
-Admin Dashboard: $TURL/
-Google OAuth Redirect URL: $TURL/api/auth/callback/google
+Admin Dashboard (Local): $BASE_LOCAL/
+Admin Dashboard (Cloudflare): $TURL/
+Google OAuth Redirect URL (Local): $BASE_LOCAL/api/auth/callback/google
+Google OAuth Redirect URL (Cloudflare): $TURL/api/auth/callback/google
 Cloudflare URL: $TURL
 LOG
       echo "Saved URLs to starting.log"
