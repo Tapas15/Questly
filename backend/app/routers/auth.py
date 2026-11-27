@@ -84,6 +84,9 @@ async def login(provider: str, request: Request, next: str = "/"):
     # falling back to configured public_base_url.
     forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
     forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    # Cloudflare quick tunnel is HTTPS; nginx inside docker may see http.
+    if forwarded_host and forwarded_host.endswith(".trycloudflare.com"):
+        forwarded_proto = "https"
     base = f"{forwarded_proto}://{forwarded_host}".rstrip("/") if forwarded_host else str(request.base_url).rstrip("/")
     if settings.public_base_url:
         base = settings.public_base_url.rstrip("/")
@@ -138,6 +141,8 @@ async def auth_callback(provider: str, request: Request, db: Session = Depends(g
     if not redirect_base:
         forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
         forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+        if forwarded_host and forwarded_host.endswith(".trycloudflare.com"):
+            forwarded_proto = "https"
         redirect_base = f"{forwarded_proto}://{forwarded_host}".rstrip("/") if forwarded_host else str(request.base_url).rstrip("/")
     return RedirectResponse(url=f"{redirect_base}{target}")
 

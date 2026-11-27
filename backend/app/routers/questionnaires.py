@@ -37,6 +37,8 @@ def _request_base(request: Request | None) -> str:
     forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
     forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
     if forwarded_host:
+        if forwarded_host.endswith(".trycloudflare.com"):
+            forwarded_proto = "https"
         return f"{forwarded_proto}://{forwarded_host}".rstrip("/")
     return str(request.base_url).rstrip("/")
 
