@@ -67,6 +67,7 @@ export function AdminPage() {
   };
 
   const selectedUrl = useMemo(() => selected ? `${window.location.origin}/q/${selected.public_slug}` : '', [selected]);
+  const openUrl = useMemo(() => selected ? `${window.location.origin}/q/${selected.public_slug}?auth=open` : '', [selected]);
   const shareUrl = useMemo(() => selected?.share_token ? `${window.location.origin}/s/${selected.share_token}` : '', [selected]);
 
   return (
@@ -108,12 +109,14 @@ export function AdminPage() {
             <div className="stat"><div className="stat-num">{selected.stats.text}</div><div className="muted">Descriptive</div></div>
           </div>
           <div className="share-links">
-            <label className="field"><span className="field-label">Public respondent link</span><div className="copy-row"><input className="input" readOnly value={selectedUrl} /><button className="btn secondary small" onClick={() => copy(selectedUrl, 'public')}>{copied === 'public' ? 'Copied' : 'Copy'}</button></div></label>
-            <label className="field"><span className="field-label">MCQ-only share view (for you/others)</span><div className="copy-row"><input className="input" readOnly value={shareUrl} /><button className="btn secondary small" onClick={() => copy(shareUrl, 'share')}>{copied === 'share' ? 'Copied' : 'Copy'}</button></div></label>
+            <label className="field"><span className="field-label">Authenticated link (Google sign-in required)</span><div className="copy-row"><input className="input" readOnly value={selectedUrl} /><button className="btn secondary small" onClick={() => copy(selectedUrl, 'public')}>{copied === 'public' ? 'Copied' : 'Copy'}</button></div></label>
+            <label className="field"><span className="field-label">Anonymous link (no sign-in, labeled Anonymous)</span><div className="copy-row"><input className="input" readOnly value={openUrl} /><button className="btn secondary small" onClick={() => copy(openUrl, 'open')}>{copied === 'open' ? 'Copied' : 'Copy'}</button></div></label>
+            <label className="field"><span className="field-label">MCQ+descriptive share view (for you/others)</span><div className="copy-row"><input className="input" readOnly value={shareUrl} /><button className="btn secondary small" onClick={() => copy(shareUrl, 'share')}>{copied === 'share' ? 'Copied' : 'Copy'}</button></div></label>
           </div>
           <div className="row gap mt">
-            <Link className="btn" to={`/q/${selected.public_slug}`}>Open form</Link>
-            {selected.share_token && <Link className="btn secondary" to={`/s/${selected.share_token}`}>Open MCQ share view</Link>}
+            <Link className="btn" to={`/q/${selected.public_slug}`}>Open authenticated form</Link>
+            <Link className="btn secondary" to={`/q/${selected.public_slug}?auth=open`}>Open anonymous form</Link>
+            {selected.share_token && <Link className="btn secondary" to={`/s/${selected.share_token}`}>Open share view</Link>}
             <button className="btn secondary" onClick={() => openResponses(selected)}>Load responses</button>
             <a className="btn secondary" href={api.exportCsvUrl(selected.public_slug)} onClick={(e) => { e.preventDefault(); setAdminToken(token); api.exportWithToken(selected.public_slug, 'csv').catch(err => setError(err.message)); }}>CSV</a>
             <a className="btn secondary" href={api.exportXlsxUrl(selected.public_slug)} onClick={(e) => { e.preventDefault(); setAdminToken(token); api.exportWithToken(selected.public_slug, 'xlsx').catch(err => setError(err.message)); }}>XLSX</a>
@@ -147,8 +150,11 @@ export function AdminPage() {
                 <div key={r.id} className="response-card">
                   <div className="response-card-head">
                     <div>
-                      <div className="response-firm">{r.respondent?.firm_practice_name || r.respondent?.your_name_optional || 'Anonymous respondent'}</div>
-                      <div className="muted">{new Date(r.submitted_at).toLocaleString()}</div>
+                      <div className="response-firm">
+                        {r.respondent?._auth?.email ? <span>{r.respondent._auth.name || r.respondent._auth.email} <span className="muted" style={{fontWeight:400}}>({r.respondent._auth.email})</span></span>
+                          : r.respondent?._anon?.label || 'Anonymous respondent'}
+                      </div>
+                      <div className="muted">{new Date(r.submitted_at).toLocaleString()} · {r.respondent?._auth ? `Google verified` : `Anonymous${r.respondent?._anon?.anon_id ? ` · ID ${r.respondent._anon.anon_id}` : ''}`}</div>
                     </div>
                     <div className="badge">{mcqAnswered}/{mcqQs.length} MCQ answered</div>
                   </div>

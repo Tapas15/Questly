@@ -245,18 +245,25 @@ async def suggest_question(slug: str, req: SuggestQuestionRequest, db: Session =
 
 
 @router.post("/questionnaires/{slug}/submit", response_model=SubmitResponse)
-def submit(slug: str, req: SubmitRequest, request: Request, db: Session = Depends(get_db)):
+def submit(slug: str, req: SubmitRequest, request: Request, db: Session = Depends(get_db), auth: str | None = None):
     q = db.scalar(select(Questionnaire).where(Questionnaire.public_slug == slug))
     if not q:
         raise HTTPException(status_code=404, detail="Questionnaire not found")
     user = _get_session_user(request, db)
-    if settings.auth_required_for_submit and not user:
+    require_auth = auth == "required" or (auth != "optional" and settings.auth_required_for_submit)
+    if require_auth and not user:
         raise HTTPException(status_code=401, detail="Please sign in with Google to submit your response.")
-    if settings.auth_required_for_submit and settings.auth_required_provider != "any" and user and user.provider != settings.auth_required_provider:
+    if require_auth and settings.auth_required_provider != "any" and user and user.provider != settings.auth_required_provider:
         raise HTTPException(status_code=401, detail=f"Please sign in with {settings.auth_required_provider.title()} to submit your response.")
     respondent = req.respondent
+    identity = {"mode": "anonymous", "label": "Anonymous"}
     if user:
-        respondent = {**req.respondent, "_auth": {"provider": user.provider, "email": user.email, "name": user.name, "user_id": user.id}}
+        identity = {"mode": "authenticated", "provider": user.provider, "email": user.email, "name": user.name, "user_id": user.id, "label": user.email or user.name or "Authenticated user"}
+        respondent = {**req.respondent, "_auth": identity}
+    else:
+        anon_id = request.cookies.get("anon_id") or secrets.token_hex(8)
+        identity = {"mode": "anonymous", "anon_id": anon_id, "label": f"Anonymous ({anon_id[:8]})"}
+        respondent = {**req.respondent, "_anon": identity}
     resp = ResponseModel(
         questionnaire_id=q.id,
         respondent_json=json.dumps(respondent, ensure_ascii=False),
@@ -271,7 +278,12 @@ def submit(slug: str, req: SubmitRequest, request: Request, db: Session = Depend
     db.add(resp)
     db.commit()
     db.refresh(resp)
-    return {"response_id": resp.id, "status": resp.status, "submitted_at": resp.submitted_at}
+    result = {"response_id": resp.id, "status": resp.status, "submitted_at": resp.submitted_at}
+    from fastapi.responses import JSONResponse
+    jr = JSONResponse(result)
+    if not user:
+        jr.set_cookie("anon_id", identity["anon_id"], max_age=60*60*24*365, httponly=False, samesite="lax")
+    return jr
 
 
 @router.get("/questionnaires/{slug}/responses")

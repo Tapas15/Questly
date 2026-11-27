@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { QuestionCard } from '../components/QuestionCard';
 import type { Questionnaire, Suggestion } from '../types';
 
 export function FormPage() {
   const { slug = '' } = useParams();
+  const [search] = useSearchParams();
+  const authMode: 'required' | 'optional' = search.get('auth') === 'open' ? 'optional' : 'required';
   const [q, setQ] = useState<Questionnaire | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -24,7 +26,8 @@ export function FormPage() {
     try {
       const [data, prov, me] = await Promise.all([api.getQuestionnaire(slug), api.getAuthProviders().catch(() => ({ providers: [], auth_required_for_submit: false })), api.getMe().catch(() => ({ user: null }))]);
       setQ(data);
-      setAuth({ providers: prov.providers || [], required: !!prov.auth_required_for_submit, user: me.user || null });
+      const required = authMode === 'required' ? !!prov.auth_required_for_submit : false;
+      setAuth({ providers: prov.providers || [], required, user: me.user || null });
       const prefill = (data as any).sample_prefill;
       if (prefill?.answers) {
         setAnswers(prefill.answers);
@@ -35,7 +38,7 @@ export function FormPage() {
     }
     catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
-  })(); }, [slug]);
+  })(); }, [slug, authMode]);
 
   const fillFromInput = () => {
     if (!q) return;
@@ -115,7 +118,7 @@ export function FormPage() {
     if (!q) return;
     setSubmitState('submitting'); setError('');
     try {
-      await api.submit(slug, { respondent, answers, ai_instruction: instruction, accepted_ai: acceptedAI });
+      await api.submit(slug, { respondent, answers, ai_instruction: instruction, accepted_ai: acceptedAI }, authMode);
       setSubmitState('done');
     } catch (e: any) { setError(e.message); setSubmitState('idle'); }
   };
@@ -141,9 +144,13 @@ export function FormPage() {
       </div>
 
       <div className="card ai-card">
-        <div className="section-kicker">Identity & AI Autofill</div>
-        <h2>Sign in and generate sample answers</h2>
-        <p className="muted">Sign in with Google or Microsoft to identify your response. A fresh sample draft is auto-filled from this questionnaire; each regenerate gives different example selections/text. Edit anything to match your real details.</p>
+        <div className="section-kicker">{authMode === 'required' ? 'Identity & AI Autofill' : 'Anonymous / AI Autofill'}</div>
+        <h2>{authMode === 'required' ? 'Sign in and generate sample answers' : 'Fill anonymously or sign in'}</h2>
+        <p className="muted">
+          {authMode === 'required'
+            ? 'Sign in with Google to identify your response. A fresh sample draft is auto-filled from this questionnaire; each regenerate gives different example selections/text. Edit anything to match your real details.'
+            : 'This is the anonymous link. You can submit without signing in; your response will be labeled Anonymous with an ID. You may optionally sign in with Google if you want your name attached.'}
+        </p>
         <div className="row gap mt" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
           {auth.user ? (
             <>
@@ -153,8 +160,8 @@ export function FormPage() {
           ) : (
             <>
               {auth.providers.length ? auth.providers.map(p => (
-                <a key={p.id} className="btn" href={`/api/auth/login/${p.id}?next=${encodeURIComponent(`/q/${slug}`)}`}>Continue with {p.label}</a>
-              )) : <span className="muted">Google sign-in is required but not configured. Admin: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env, then redeploy.</span>}
+                <a key={p.id} className={`btn ${authMode === 'required' ? '' : 'secondary'}`} href={`/api/auth/login/${p.id}?next=${encodeURIComponent(`/q/${slug}${authMode === 'optional' ? '?auth=open' : ''}`)}`}>Continue with {p.label}</a>
+              )) : authMode === 'required' ? <span className="muted">Google sign-in is required but not configured. Admin: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env, then redeploy.</span> : <span className="muted">Anonymous submission enabled. Google sign-in optional if configured.</span>}
             </>
           )}
         </div>
@@ -205,9 +212,9 @@ export function FormPage() {
       <div className="card submit-bar">
         <div>
           <div className="submit-title">Ready to submit?</div>
-          <div className="muted">{auth.required && !auth.user ? 'Sign in with Google before submitting your response.' : 'Review your answers. AI suggestions are only included if you accepted or edited them.'}</div>
+          <div className="muted">{authMode === 'required' && !auth.user ? 'Sign in with Google before submitting your response.' : authMode === 'optional' && !auth.user ? 'Submitting as Anonymous (no Google sign-in). Sign in above if you want your name attached.' : 'Review your answers. AI suggestions are only included if you accepted or edited them.'}</div>
         </div>
-        <button className="btn submit-btn" onClick={submit} disabled={submitState === 'submitting' || (auth.required && !auth.user)}>{submitState === 'submitting' ? 'Submitting...' : 'Submit response'}</button>
+        <button className="btn submit-btn" onClick={submit} disabled={submitState === 'submitting' || (authMode === 'required' && !auth.user)}>{submitState === 'submitting' ? 'Submitting...' : authMode === 'optional' && !auth.user ? 'Submit anonymously' : 'Submit response'}</button>
       </div>
     </div>
   );

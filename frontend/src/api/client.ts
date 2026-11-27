@@ -53,8 +53,8 @@ export const api = {
     request(`/api/questionnaires/${slug}/suggest-all`, { method: 'POST', body: JSON.stringify(body) }),
   suggestQuestion: async (slug: string, body: any): Promise<{ suggestions: Suggestion[]; provider: string; model: string }> =>
     request(`/api/questionnaires/${slug}/suggest-question`, { method: 'POST', body: JSON.stringify(body) }),
-  submit: async (slug: string, body: any) =>
-    request(`/api/questionnaires/${slug}/submit`, { method: 'POST', body: JSON.stringify(body) }),
+  submit: async (slug: string, body: any, authMode?: 'required' | 'optional') =>
+    request(`/api/questionnaires/${slug}/submit${authMode ? `?auth=${authMode}` : ''}`, { method: 'POST', body: JSON.stringify(body) }),
   listResponses: async (slug: string): Promise<SavedResponse[]> => {
     const data = await request<{ responses: SavedResponse[] }>(`/api/questionnaires/${slug}/responses`, {}, true);
     return data.responses;
