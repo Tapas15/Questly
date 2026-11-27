@@ -5,9 +5,26 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688.svg)](backend/)
 [![React](https://img.shields.io/badge/React-frontend-61dafb.svg)](frontend/)
 
-Free, open-source, AI-powered questionnaire app. Upload a `.docx` questionnaire, auto-extract questions, share public links, collect responses with optional Google sign-in, generate AI-assisted drafts, and view a beautiful response dashboard.
+Free, open-source, AI-powered questionnaire app. Upload a `.docx` questionnaire, auto-extract questions, share public links, collect responses with optional Google sign-in, generate AI-assisted drafts, and view a response dashboard.
 
-> **MIT Licensed — free for everyone to use, modify, and deploy.**
+> **MIT Licensed** — free for everyone to use, modify, and deploy.
+
+## Table of Contents
+
+- [UI Preview](#ui-preview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Quick Start (Docker)](#quick-start-docker-recommended)
+- [Local Development](#local-development)
+- [Termux / proot-distro (Android)](#termux--proot-distro-android)
+- [Configuration](#configuration-env)
+- [Google Sign-In](#google-sign-in-setup)
+- [Google Sheets / Webhook Export](#google-sheets--structured-export)
+- [Usage](#usage)
+- [API Reference](#api-reference)
+- [Security & Privacy](#security--privacy-notes)
+- [Development & Tests](#development--tests)
+- [License](#license)
 
 ## UI Preview
 
@@ -17,11 +34,11 @@ Free, open-source, AI-powered questionnaire app. Upload a `.docx` questionnaire,
 
 ### UI/UX Highlights
 
-- **Clean premium layout** — card-based sections, clear spacing, and readable typography for long questionnaires.
+- **Clean premium layout** — card-based sections, clear spacing, readable typography for long questionnaires.
 - **Guided respondent flow** — sample draft selector, AI autofill, manual edit/accept/reject, and final review before submit.
 - **Dual access modes** — authenticated Google link for verified identity, anonymous link for open collection with name/firm/ID capture.
 - **Admin operations** — upload DOCX, copy share links, load responses, export CSV/XLSX, delete questionnaires.
-- **Insights dashboard** — aggregate MCQ distribution bars, descriptive response review, individual vs all-response view.
+- **Insights dashboard** — aggregate MCQ distribution charts, descriptive response review, individual vs all-response view.
 - **Responsive design** — usable on desktop and mobile screens.
 
 ## Features
@@ -31,56 +48,110 @@ Free, open-source, AI-powered questionnaire app. Upload a `.docx` questionnaire,
 - **Google SSO (optional)** — verified respondent identity; anonymous submissions get a stable anonymous ID and optional name/firm.
 - **Single response per user** — same Google user or anonymous browser can reopen and update their response.
 - **AI autofill** — Ollama or OpenAI-compatible provider; suggestions only from user context, no invented facts.
-- **Sample drafts** — 3 built-in profile samples + random draft; auto-fills all 42 questions for review/edit.
+- **Sample drafts** — 3 built-in profile samples + random draft; auto-fills questions for review/edit.
 - **Admin dashboard** — upload, manage, copy links, load responses, export CSV/XLSX.
-- **Response dashboard** — aggregate MCQ distribution charts, descriptive answer review, individual/aggregate toggle.
+- **Response dashboard** — aggregate MCQ charts, descriptive answer review, individual/aggregate toggle.
 - **Share view** — read-only `/s/{share_token}` with MCQ + descriptive answers.
-- **Docker + Termux** — one-command Docker deploy; Termux script for Android.
+- **Deployment options** — Docker Compose, local dev, Termux/proot-distro.
+
+## Architecture
+
+| Layer | Tech | Key paths |
+|---|---|---|
+| Backend | FastAPI, SQLAlchemy, Pydantic Settings, python-docx, Authlib, httpx, openpyxl | `backend/app/main.py`, `backend/app/config.py`, `backend/app/routers/`, `backend/app/services/` |
+| Frontend | React 19, TypeScript, Vite, React Router | `frontend/src/App.tsx`, `frontend/src/pages/`, `frontend/src/api/client.ts` |
+| Deploy | Docker Compose, Nginx, Termux/proot scripts | `docker-compose.yml`, `frontend/nginx.conf`, `deploy-termux.sh`, `deploy-proot.sh` |
+
+### Repository Structure
+
+```text
+formfill/
+├── README.md
+├── DOCKER.md
+├── docker-compose.yml
+├── .env.example
+├── deploy-termux.sh              # native Termux script (may fail on pydantic-core builds)
+├── deploy-proot.sh               # recommended for Android/proot-distro Linux
+├── starting.log                  # generated runtime URL log
+├── CA_Accounting_Firm_Problem_Validation_Questionnaire.docx
+├── backend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── app/
+│   │   ├── main.py               # FastAPI app, dynamic CORS, session, startup migrations
+│   │   ├── config.py             # env settings
+│   │   ├── db.py / models.py / schemas.py
+│   │   ├── routers/              # questionnaires.py, auth.py
+│   │   └── services/             # parser.py, autofill.py, llm.py, export.py, webhook.py
+│   └── tests/
+├── frontend/
+│   ├── Dockerfile
+│   ├── nginx.conf
+│   ├── package.json
+│   └── src/
+│       ├── App.tsx / api/client.ts / types.ts
+│       ├── pages/                # AdminPage, FormPage, DashboardPage, SharedPage
+│       └── components/QuestionCard.tsx
+├── docs/screenshots/
+└── scripts/                      # starting-log helpers
+```
 
 ## Quick Start (Docker, recommended)
 
 ### Prerequisites
+
 - Docker Desktop / Docker Engine + Docker Compose
 
 ### Run
+
 ```bash
 git clone https://github.com/Tapas15/Questly.git
 cd Questly
 cp .env.example .env
-# edit .env: set ADMIN_TOKEN, SESSION_SECRET, optional LLM/webhook/auth.
+# Edit .env: set ADMIN_TOKEN, SESSION_SECRET, optional LLM/webhook/auth.
 # Leave FRONTEND_ORIGIN/PUBLIC_BASE_URL empty for quick tunnels/dynamic URLs.
 docker compose up --build -d
 ```
 
-Check status / print URLs / `starting.log`:
+### Check status / URLs
+
 ```bash
-docker compose up -d
 docker compose ps
 docker compose run --rm urls   # writes starting.log with local + cloudflare URLs
-type starting.log              # Windows (PowerShell: Get-Content starting.log)
+```
+
+```powershell
+Get-Content starting.log        # PowerShell
+# or: type starting.log         # cmd
 ```
 
 `starting.log` contains:
+
 - `Admin Dashboard (Local)`
 - `Admin Dashboard (Cloudflare)`
 - `Google OAuth Redirect URL (Local)`
 - `Google OAuth Redirect URL (Cloudflare)`
 - `Cloudflare URL`
 
-If cloudflared is running and writing `cloudflared.err.log` in project root, `docker compose run --rm urls` auto-detects the latest tunnel URL. You can also run:
+If `cloudflared` is running and writing `cloudflared.err.log` in the project root, `docker compose run --rm urls` auto-detects the latest tunnel URL. You can also run:
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/update-starting-log.ps1
 ```
 
-Open:
-- Admin: `http://localhost:8080`
-- API health: `http://localhost:8000/api/health`
-- After uploading DOCX in Admin, form: `http://localhost:8080/q/<slug>`
-- Anonymous form: `http://localhost:8080/q/<slug>?auth=open`
-- Dashboard: `http://localhost:8080/dashboard/<slug>`
-- Share (read-only, token from Admin): `http://localhost:8080/s/<share_token>`
+### Open
 
-Stop:
+| URL | Purpose |
+|---|---|
+| `http://localhost:8080` | Admin dashboard |
+| `http://localhost:8000/api/health` | API health |
+| `http://localhost:8080/q/<slug>` | Authenticated/public form (after DOCX upload) |
+| `http://localhost:8080/q/<slug>?auth=open` | Anonymous form |
+| `http://localhost:8080/dashboard/<slug>` | Analytics dashboard |
+| `http://localhost:8080/s/<share_token>` | Read-only share view |
+
+### Stop
+
 ```bash
 docker compose down          # keeps data
 docker compose down -v       # deletes DB/uploads volumes
@@ -89,6 +160,7 @@ docker compose down -v       # deletes DB/uploads volumes
 ## Local Development
 
 ### Backend
+
 ```powershell
 cd Questly
 python -m venv .venv
@@ -100,16 +172,52 @@ $env:PYTHONPATH='.'
 ```
 
 ### Frontend
+
 ```powershell
 cd Questly\frontend
 npm install
 npm run dev
 ```
+
 Dev UI: `http://localhost:5173` (proxies `/api` to backend).
 
-## Termux (Android)
+## Termux / proot-distro (Android)
 
-### Install & run (after clone)
+> **Recommended:** use `proot-distro` Ubuntu/Debian for this app. Native Termux pip installs can fail building `pydantic-core` (Rust/maturin) for `pydantic>=2.7`.
+
+### Option A: proot-distro (recommended)
+
+On Termux host:
+
+```bash
+pkg update -y
+pkg install proot-distro git -y
+proot-distro install ubuntu
+proot-distro login ubuntu
+```
+
+Inside Ubuntu proot:
+
+```bash
+apt-get update && apt-get install -y git
+git clone https://github.com/Tapas15/Questly.git
+cd Questly
+chmod +x deploy-proot.sh
+./deploy-proot.sh
+```
+
+`deploy-proot.sh` installs apt deps + Node.js 20, creates `.venv`, installs backend deps, builds frontend, creates `.env` if missing, and generates `start-proot.sh` / `stop-proot.sh`.
+
+Start/stop/logs:
+
+```bash
+./start-proot.sh
+./stop-proot.sh
+cat starting.log
+tail -f .run/backend.log .run/frontend.log
+```
+
+### Option B: Native Termux (best effort)
 
 ```bash
 pkg update -y
@@ -120,74 +228,48 @@ chmod +x deploy-termux.sh
 ./deploy-termux.sh
 ```
 
-What `deploy-termux.sh` does:
-- Installs dependencies (python, nodejs-lts, git, build tools)
-- Creates `.venv`, installs `backend/requirements.txt`
-- Creates `.env` from `.env.example` if missing (leaves `PUBLIC_BASE_URL`/`FRONTEND_ORIGIN` empty for dynamic URLs)
-- Builds frontend and creates `start-termux.sh` / `stop-termux.sh`
-- Starts backend + frontend
+If you hit `pydantic-core`/Rust build errors, switch to Option A.
 
-### Start / stop / logs
+### Cloudflare quick tunnel
 
 ```bash
-./start-termux.sh    # prints URLs and writes starting.log
-./stop-termux.sh
-cat starting.log
-tail -f .run/backend.log
+cloudflared tunnel --url http://localhost:8080
 ```
 
-### URLs / `starting.log`
-
-Run:
-```bash
-./start-termux.sh
-cat starting.log
-```
-
-`starting.log` contains:
-- `Admin Dashboard (Local)`
-- `Admin Dashboard (Cloudflare)`
-- `Google OAuth Redirect URL (Local)`
-- `Google OAuth Redirect URL (Cloudflare)`
-- `Cloudflare URL`
-
-Install cloudflared on Termux if needed:
-```bash
-pkg install cloudflared -y
-```
-
-> Quick tunnel URL changes every restart. The app accepts the new URL automatically (no `.env` change needed). For Google sign-in, add `Google OAuth Redirect URL (Cloudflare)` from `starting.log` in Google Cloud Console.
-> Data persists in `backend/data` and `backend/uploads`.
-
-Logs: `.run/backend.log`, `.run/frontend.log`, `.run/cloudflared.log`, `starting.log`
+- Quick tunnel URL changes every restart; the app accepts the new URL automatically when `PUBLIC_BASE_URL`/`FRONTEND_ORIGIN` are empty.
+- For Google sign-in, add the current `https://<tunnel>.trycloudflare.com/api/auth/callback/google` to Google Cloud Console after each tunnel restart.
+- For a permanent URL, use a named Cloudflare Tunnel/custom domain and set fixed `PUBLIC_BASE_URL`/`FRONTEND_ORIGIN`.
 
 ## Configuration (`.env`)
+
+Copy `.env.example` to `.env` and adjust as needed.
 
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./backend/data/app.db` | SQLite default; set PostgreSQL URL for Postgres. |
 | `ADMIN_TOKEN` | `changeme` | Admin API token for upload/export/delete/responses. |
-| `FRONTEND_ORIGIN` | empty | Optional fixed frontend/public origin. Leave empty for quick tunnels; app infers active origin from request headers. |
-| `PUBLIC_BASE_URL` | empty | Optional fixed public base URL for generated links/OAuth redirects. Leave empty for quick tunnels. |
+| `FRONTEND_ORIGIN` | empty | Optional fixed frontend/public origin. Leave empty for dynamic/tunnel URLs. |
+| `PUBLIC_BASE_URL` | empty | Optional fixed public base URL for generated links/OAuth redirects. Leave empty for dynamic/tunnel URLs. |
 | `LLM_PROVIDER` | `ollama` | `ollama` or `openai_compatible`. |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint. Docker: `http://host.docker.internal:11434`. |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint. Docker host: `http://host.docker.internal:11434`. |
 | `OLLAMA_MODEL` | `llama3.1` | Ollama model. |
 | `LLM_API_KEY` | empty | API key for OpenAI-compatible provider. |
 | `LLM_BASE_URL` | empty | e.g. `https://api.kilo.ai/api/gateway`. |
 | `LLM_MODEL` | `gpt-4o-mini` | Model id for compatible provider. |
 | `SESSION_SECRET` | `change-this-session-secret` | Strong random secret for auth sessions. |
-| `AUTH_REQUIRED_FOR_SUBMIT` | `false` | Require sign-in before submit. |
+| `AUTH_REQUIRED_FOR_SUBMIT` | `false` (example: `true`) | Require sign-in before submit. |
 | `AUTH_REQUIRED_PROVIDER` | `google` | `google`, `microsoft`, or `any`. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | empty | Google OAuth credentials. |
 | `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` | empty | Microsoft OAuth credentials. |
 | `MICROSOFT_TENANT` | `common` | Microsoft tenant. |
-| `RESPONSE_WEBHOOK_URL` | empty | Google Apps Script Web app URL (`https://script.google.com/macros/s/.../exec`) that receives submit payloads. |
-| `RESPONSE_WEBHOOK_SECRET` | empty | Optional shared secret sent as `X-Webhook-Secret`; must match script `SHARED_SECRET`. |
+| `RESPONSE_WEBHOOK_URL` | empty | Webhook endpoint receiving submit payloads (e.g. Google Apps Script Web app URL). |
+| `RESPONSE_WEBHOOK_SECRET` | empty | Optional shared secret sent as `X-Webhook-Secret`. |
 | `RESPONSE_WEBHOOK_ENABLED` | `true` | Enable webhook delivery when URL is set. |
 
-## Google Sign-In Setup (public authenticated link)
+## Google Sign-In Setup
 
 1. Set in `.env`:
+
    ```env
    PUBLIC_BASE_URL=https://your-domain
    FRONTEND_ORIGIN=https://your-domain
@@ -197,51 +279,39 @@ Logs: `.run/backend.log`, `.run/frontend.log`, `.run/cloudflared.log`, `starting
    GOOGLE_CLIENT_ID=<client-id>
    GOOGLE_CLIENT_SECRET=<client-secret>
    ```
+
 2. In Google Cloud Console → APIs & Services → Credentials → OAuth client (Web app), add redirect URI:
-   ```
+
+   ```text
    https://your-domain/api/auth/callback/google
    ```
-3. Redeploy: `docker compose up --build -d`
-4. Share Admin’s **Authenticated link**. Respondents sign in with Google before submit; identity is attached to response.
 
-### Cloudflare quick tunnel (URL changes on restart)
+3. Redeploy:
 
-Quick tunnels (`cloudflared tunnel --url http://localhost:8080`) generate a random `*.trycloudflare.com` URL on each restart. This app now supports that mode **without changing `.env`**:
+   ```bash
+   docker compose up --build -d
+   ```
 
-- Leave `PUBLIC_BASE_URL` and `FRONTEND_ORIGIN` empty.
-- Start app (Docker or Termux), then run: `cloudflared tunnel --url http://localhost:8080`
-- Use the printed `https://....trycloudflare.com` URL. App accepts the new URL automatically (dynamic CORS/origin/redirect handling).
-- Data stays in Docker volumes `backend_data`/`backend_uploads` across URL changes and container restarts (`docker compose down -v` deletes data).
+4. Share the Admin **Authenticated link**. Respondents sign in with Google before submit.
 
-**Google OAuth caveat:** Google requires each redirect URI to be pre-registered. For quick tunnels, you must add the new `https://<current-tunnel>.trycloudflare.com/api/auth/callback/google` in Google Cloud Console after every tunnel restart. The app cannot bypass this Google security rule. For a permanent URL, use a named Cloudflare Tunnel/custom domain and set fixed `PUBLIC_BASE_URL`/`FRONTEND_ORIGIN`.
+### Cloudflare quick tunnel caveat
 
-## Google Sheets / Structured Export (No Google OAuth in App)
+Quick tunnels (`*.trycloudflare.com`) change on restart. The app handles dynamic origin/redirect inference, but Google still requires the exact redirect URI to be pre-registered. Add the current tunnel callback from `starting.log` after each restart, or use a named/custom domain for stable OAuth.
 
-For a simple “no-auth in app” flow, use a Google Apps Script web app as a webhook. Questly POSTs a structured JSON payload on every submit; the script appends a row to Google Sheets.
+## Google Sheets / Structured Export
 
-### Where to get `RESPONSE_WEBHOOK_URL`
+Use a Google Apps Script Web app webhook. Questly POSTs structured JSON on every submit.
 
-`RESPONSE_WEBHOOK_URL` is the **Google Apps Script Web app URL** (looks like `https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec`). You get it after deploying the script:
+### 1. Create Apps Script webhook
 
 1. Open your Google Sheet → **Extensions** → **Apps Script**.
 2. Paste the script below and set `SHARED_SECRET`.
-3. Click **Deploy** → **New deployment**.
-4. Click gear icon → select **Web app**.
-5. Set **Execute as** = `Me`.
-6. Set **Who has access** = `Anyone` (for public form submissions). If your users are all in your Workspace and you prefer restricted access, choose the Workspace option, but test webhook delivery.
-7. Click **Deploy**, authorize access, then copy the **Web app URL**. This copied URL is your `RESPONSE_WEBHOOK_URL`.
-
-> If you edit the script later, use **Deploy** → **Manage deployments** → edit → **New version** → Deploy. The URL usually stays the same for that deployment; copy it again to be safe.
-
-### 1) Create Google Sheet + Apps Script
-
-1. Create a Google Sheet (e.g. `Questly Responses`).
-2. Extensions → **Apps Script**.
-3. Replace `Code.gs` with:
+3. Deploy as **Web app**: Execute as **Me**, Who has access **Anyone** (or Workspace as needed).
+4. Copy the Web app URL (`.../exec`) into `RESPONSE_WEBHOOK_URL`.
 
 ```javascript
 const SHEET_NAME = 'Responses';
-const SHARED_SECRET = 'J6F7Jslm0Mi2GYLfh-dA4O7B238v-12AJSTjDBVZYbI'; // must match RESPONSE_WEBHOOK_SECRET
+const SHARED_SECRET = 'replace-with-your-secret'; // must match RESPONSE_WEBHOOK_SECRET
 
 function doPost(e) {
   try {
@@ -293,96 +363,72 @@ function ensureHeaders(sheet, headers) {
   }
 }
 
-function json(obj, code) {
+function json(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }
 ```
 
-4. Deploy → **New deployment** → type **Web app**.
-   - Execute as: **Me**
-   - Who has access: **Anyone** (or Anyone with Google account if internal; “Anyone” is easiest for webhook)
-5. Copy the **Web app URL** — this is the value for `RESPONSE_WEBHOOK_URL`. It should end with `/exec`.
-
-### 2) Configure Questly
-
-Add to `.env`:
+### 2. Configure Questly
 
 ```env
-RESPONSE_WEBHOOK_URL=https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec  # copied from Apps Script Deploy > Web app
-RESPONSE_WEBHOOK_SECRET=J6F7Jslm0Mi2GYLfh-dA4O7B238v-12AJSTjDBVZYbI  # same value as SHARED_SECRET in script
+RESPONSE_WEBHOOK_URL=https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec
+RESPONSE_WEBHOOK_SECRET=replace-with-your-secret
 RESPONSE_WEBHOOK_ENABLED=true
 ```
 
-Redeploy/restart backend (`docker compose up --build -d`).
+Redeploy/restart backend after changing env.
 
-### 3) Payload shape
+### 3. Payload shape
 
-Questly sends structured JSON:
+Questly sends structured JSON including:
 
 - `respondent`: identity, name, email, firm, city, role, contact
-- `questions[]`: `number`, `text`, `type`, `section`, `answer` (human-readable)
-- `answers_flat`: `Q1..Qn` keys for easy automation
+- `questions[]`: number, text, type, section, human-readable answer
+- `answers_flat`: `Q1..Qn` keys
 - `raw_answers`: original answer values
-
-This gives both a readable Sheets row and machine-friendly fields.
-
-### 4) Test webhook / Excel/Sheets
-
-1. Set env and restart backend:
-   ```bash
-   # .env
-   RESPONSE_WEBHOOK_URL=https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec
-   RESPONSE_WEBHOOK_SECRET=<same-as-SHARED_SECRET>
-   RESPONSE_WEBHOOK_ENABLED=true
-   docker compose up -d --build backend
-   ```
-2. Submit a test response from the form.
-3. Check submit API response includes `"webhook":{"sent":true,...}"`.
-4. Check backend logs:
-   ```bash
-   docker compose logs --tail=100 backend | grep webhook
-   ```
-5. Confirm a new row appears in Google Sheet. If using Excel via connected sheet/Power Query, refresh/import from that sheet.
-
-If `sent:false`: verify secret matches, Apps Script deployed as latest Web app version, and access allows webhook POST (usually `Anyone`).
 
 ## Usage
 
-1. Open Admin (`/`), enter `ADMIN_TOKEN`.
-2. Upload `.docx` questionnaire.
+1. Open Admin (`/`) and enter `ADMIN_TOKEN`.
+2. Upload a `.docx` questionnaire.
 3. Copy links from Admin:
-   - **Authenticated link**: `/q/{slug}` — Google sign-in required.
-   - **Anonymous link**: `/q/{slug}?auth=open` — no sign-in; name/firm requested for identification.
+   - **Authenticated link**: `/q/{slug}` — Google sign-in required (when enabled).
+   - **Anonymous link**: `/q/{slug}?auth=open` — no sign-in; name/firm requested.
    - **Share view**: `/s/{share_token}` — read-only MCQ+descriptive summary.
-4. Respondent fills/edits answers; can use sample drafts or AI suggestions; submits. Same user can reopen and update their response.
-5. Admin loads responses, exports CSV/XLSX, or opens **Dashboard** (`/dashboard/{slug}`) for aggregate/individual insights.
+4. Respondent fills/edits answers; can use sample drafts or AI suggestions; submits. Same user/browser identity can reopen and update their response.
+5. Admin loads responses, exports CSV/XLSX, or opens **Dashboard** (`/dashboard/{slug}`).
 
-## API (main)
+## API Reference
+
+Main endpoints (see routers for full behavior):
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/api/questionnaires/upload` | Admin | Upload/parse DOCX |
-| GET | `/api/questionnaires` | Admin | List questionnaires |
-| GET | `/api/questionnaires/{slug}` | Public | Get questionnaire + sample prefill |
-| GET | `/api/questionnaires/{slug}/sample?profile=` | Public | Random or profile sample draft |
-| POST | `/api/questionnaires/{slug}/suggest-all` | Public | AI suggestions for all questions |
-| POST | `/api/questionnaires/{slug}/submit?auth=required|optional` | Public/session | Submit or update own response |
-| GET | `/api/questionnaires/{slug}/my-response` | Session | Get current user's existing response |
-| GET | `/api/questionnaires/{slug}/responses` | Admin | List responses |
-| GET | `/api/questionnaires/{slug}/responses.csv|xlsx` | Admin | Export |
-| GET | `/api/share/{token}` | Public | Read-only share view |
-| GET | `/api/auth/providers` `/login/*` `/callback/*` `/me` `/logout` | Public | OAuth/session auth |
+| `POST` | `/api/questionnaires/upload` | Admin | Upload/parse DOCX |
+| `GET` | `/api/questionnaires` | Admin | List questionnaires |
+| `GET` | `/api/questionnaires/{slug}` | Public | Get questionnaire + sample prefill |
+| `GET` | `/api/questionnaires/{slug}/sample?profile=` | Public | Random or profile sample draft |
+| `POST` | `/api/questionnaires/{slug}/suggest-all` | Public | AI suggestions for all questions |
+| `POST` | `/api/questionnaires/{slug}/suggest-question` | Public | AI suggestion for one question |
+| `POST` | `/api/questionnaires/{slug}/submit?auth=required\|optional` | Public/session | Submit or update own response |
+| `GET` | `/api/questionnaires/{slug}/my-response` | Session | Get current user's existing response |
+| `GET` | `/api/questionnaires/{slug}/responses` | Admin | List responses |
+| `GET` | `/api/questionnaires/{slug}/responses.csv\|xlsx` | Admin | Export responses |
+| `GET` | `/api/share/{token}` | Public | Read-only share view |
+| `GET/POST` | `/api/auth/*` | Public | OAuth providers, login/callback, me, logout |
+| `GET` | `/api/health` | Public | Health check |
 
 ## Security & Privacy Notes
 
-- Do not commit `.env` or real API keys. `.gitignore` excludes `.env`, data, uploads, logs.
+- Do **not** commit `.env` or real API keys. `.gitignore` excludes `.env`, data, uploads, logs.
 - Set strong `ADMIN_TOKEN` and `SESSION_SECRET` in production.
-- Google/Microsoft OAuth secrets must be kept server-side.
-- Anonymous responses are identified by cookie-based anon ID and optional name/firm; not identity-proof.
-- AI suggestions are sanitized server-side; invalid MCQ values discarded; no invented facts instructed.
+- Keep Google/Microsoft OAuth secrets server-side.
+- Anonymous responses are cookie-based IDs plus optional name/firm; **not identity-proof**.
+- AI suggestions are sanitized server-side; invalid MCQ values are discarded; prompt instructs no invented facts.
+- Webhook delivery is best-effort and reported in submit response; failures should be monitored via backend logs.
 
-## Development
+## Development & Tests
 
 ```bash
 # backend parser smoke test
@@ -391,6 +437,8 @@ $env:PYTHONPATH='.'; python -c "from backend.tests.test_parser import test_parse
 # frontend build
 cd frontend && npm run build
 ```
+
+> Note: `backend/tests/test_api_smoke.py` is smoke-oriented and sets env vars after app import; for strict isolation, run with a fresh process/config reload.
 
 ## License
 
